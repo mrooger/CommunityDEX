@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Community Dex</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;width:344px;background:#101626;color:#f9f9ff;font:12px/1.5 system-ui,"Segoe UI",sans-serif}
+    .hero{padding:25px 22px;background:radial-gradient(ellipse at 0 0,#ff7a3544,transparent 66%),linear-gradient(135deg,#19223a,#101626);border-bottom:1px solid #ffffff14}
+    .brand{display:flex;align-items:center;gap:12px}
+    .mark{display:grid;place-items:center;width:54px;height:54px;padding:3px;border-radius:17px;background:#ff925b18;box-shadow:0 10px 27px #f3704c35}
+    .mark img{width:100%;height:100%;object-fit:contain}
+    h1{margin:0;font-size:21px;letter-spacing:-.6px}
+    h1 em{color:#ffad76;font-style:normal}
+    .brand p{font-size:10px;color:#9eabc4;margin:2px 0 0;letter-spacing:1.1px}
+    .content{padding:20px 22px}
+    .hero-card{padding:14px;margin-bottom:14px;border:1px solid #f7aa6147;border-radius:14px;background:#1e2940}
+    .hero-card strong{color:#ffbd85;font-size:13px}
+    .hero-card p{color:#b9c6da;margin:5px 0 0;font-size:11px}
+    .links{display:flex;gap:9px}
+    .links button{flex:1;border:0;border-radius:10px;padding:12px 9px;cursor:pointer;font-weight:800;background:linear-gradient(145deg,#ffae69,#e66a5a);color:#1b2030}
+    .links button:last-child{background:#ffffff0c;color:#cdd8ed;border:1px solid #ffffff1f}
+    .links button:focus-visible{outline:2px solid #ffd4a7;outline-offset:3px}
+    .bottom{display:flex;justify-content:space-between;align-items:center;color:#8191aa;margin-top:17px;font-size:10px}
+    .bottom a{color:#ffbc86;text-decoration:none}
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="brand">
+      <div class="mark"><img src="icons/icon128.png" alt="Community Dex"></div>
+      <div><h1>COMMUNITY <em>DEX</em></h1><p>SEU COMPANHEIRO POKÉMON</p></div>
+    </div>
+  </header>
+  <main class="content">
+    <div class="hero-card"><strong>✦ Sua Pokédex, do seu jeito</strong><p>Pokédex, Hunt, Capturas e Shinies em um só lugar. Use Alt + P ou o ícone flutuante para abrir.</p></div>
+    <div class="links"><button id="open">◉ Abrir jogo</button><button id="help">⌁ Manual</button></div>
+    <footer class="bottom"><span>Community Dex · v1.1.0</span><a href="https://stigalzera.com/" target="_blank" rel="noopener noreferrer">✦ Community Hub ↗</a></footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
