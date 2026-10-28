@@ -279,3 +279,39 @@
 @media(max-width:550px){#sd-panel{top:82px;bottom:auto;height:calc(100vh - 92px)}}
 
 #sd-dock:hover{transform:none;filter:brightness(1.08)}
+
+
+/* Community Dex 1.2 — adaptive Smart / Complete presentation */
+#sd-dock[hidden],#sd-panel[hidden]{display:none!important}
+#sd-panel .sd-pokemon-actions{flex-wrap:nowrap!important;gap:5px!important;align-items:center;justify-content:flex-start;min-width:0}
+#sd-panel .sd-pokemon-actions .sd-pill{flex:0 0 auto;margin:0;font-size:9px;padding:5px 6px;white-space:nowrap}
+#sd-panel .sd-pokemon-actions button{margin:0!important;flex:0 0 auto!important;padding:5px 6px;font-size:9px;white-space:nowrap;line-height:1.2;min-height:26px}
+#sd-panel .sd-pokemon-actions .sd-copy-scanned{font-weight:800}
+#sd-panel .sd-mode-card .sd-modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:10px 0 13px}
+#sd-panel .sd-mode-option{min-width:0;display:flex;align-items:flex-start;flex-direction:column;gap:6px;text-align:left;border-radius:12px;background:linear-gradient(125deg,#29374e,#141e31);border:1px solid #ffffff24;color:#d6e2f5;padding:13px 10px;cursor:pointer}
+#sd-panel .sd-mode-option.active{border-color:#ffc394;background:linear-gradient(135deg,#ffae662c,#77435b54);box-shadow:0 0 0 1px #ffad5f33 inset}
+#sd-panel .sd-mode-option:hover{border-color:#ffb77f99}
+#sd-panel .sd-mode-option b{font-size:12px;color:#fff}
+#sd-panel .sd-mode-option small{font-size:10px;color:#94a7c2;line-height:1.4}
+#sd-panel .sd-mode-symbol{font-size:24px;color:#ffa979}
+#sd-resize-grip{display:none;position:absolute;bottom:0;right:0;width:26px;height:26px;z-index:3;align-items:center;justify-content:center;border-radius:12px 0 19px 0;background:linear-gradient(135deg,transparent,#ff9c6859);color:#ffc397;font-size:19px;cursor:nwse-resize;touch-action:none;user-select:none}
+#community-dex-root[data-dex-mode="complete"] #sd-resize-grip{display:flex}
+#community-dex-root[data-dex-mode="complete"] #sd-panel.sd-minimized #sd-resize-grip{display:none}
+#community-dex-root[data-dex-mode="complete"] #sd-panel{min-width:min(330px,calc(100vw - 16px));max-width:calc(100vw - 12px);max-height:calc(100vh - 12px);border-color:#ffa96e88!important;box-shadow:0 22px 75px #000c,0 0 0 1px #ef8f4740 inset!important;border-radius:18px!important}
+#community-dex-root[data-dex-mode="complete"] #sd-titlebar{padding:11px 15px!important;min-height:58px;cursor:move;background:linear-gradient(105deg,#b05f45c0,#7f404699 45%,#242a49ea)!important;border-bottom:1px solid #ffb7803d;}
+#community-dex-root[data-dex-mode="complete"] #sd-panel .sd-brand-logo{width:100%;height:100%}
+#community-dex-root[data-dex-mode="complete"] #sd-panel .sd-brand-mark{width:38px;height:38px;cursor:pointer;outline:1px solid #ffbf8e4f}
+#community-dex-root[data-dex-mode="complete"] #sd-panel .sd-brand strong{font-size:15px}
+#community-dex-root[data-dex-mode="complete"] #sd-panel .sd-brand span{font-size:8px;color:#ead3c6}
+#community-dex-root[data-dex-mode="complete"] #sd-panel .sd-header-actions button{background:#1c24377c;color:#ffe4d3;border:1px solid #ffffff32}
+#community-dex-root[data-dex-mode="complete"] #sd-panel #sd-nav{justify-content:space-around;gap:8px;}
+#community-dex-root[data-dex-mode="complete"] #sd-panel #sd-nav button{flex:1 1 58px;max-width:130px}
+#community-dex-root[data-dex-mode="complete"] #sd-panel #sd-nav button span{font-size:19px}
+#community-dex-root[data-dex-mode="complete"] #sd-panel #sd-body{padding:17px 20px 28px}
+#community-dex-root[data-dex-mode="complete"] #sd-panel #sd-footer{padding-right:35px}
+#community-dex-root[data-dex-mode="complete"] #sd-dock{top:12px!important;right:16px!important;left:auto!important;bottom:auto!important;width:232px!important;height:56px!important;border-radius:15px!important;padding:7px 11px!important;display:flex!important;flex-direction:row!important;justify-content:flex-start!important;gap:11px!important}
+#community-dex-root[data-dex-mode="complete"] #sd-dock .sd-dock-logo{width:39px;height:39px;flex:none}
+#community-dex-root[data-dex-mode="complete"] #sd-dock::after{content:'COMMUNITY DEX  ▣';color:#fff;font-size:12px;letter-spacing:1.2px;font-weight:900;white-space:nowrap}
+#community-dex-root[data-dex-mode="complete"] #sd-dock[hidden]{display:none!important}
+#community-dex-root[data-dex-mode="complete"] #sd-dock-count{top:-7px;right:-7px}
+@media(max-width:475px){#sd-panel .sd-pokemon-actions{gap:3px!important}#sd-panel .sd-pokemon-actions button{font-size:8px;padding:4px 4px}#sd-panel .sd-pokemon-actions .sd-pill{font-size:8px;padding:4px 4px}#community-dex-root[data-dex-mode="complete"] #sd-panel #sd-body{padding:12px 10px 20px}}

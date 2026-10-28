@@ -1,39 +1,73 @@
-# Community Dex · v1.1.0
+# Community Dex
 
-Extensão independente para Chrome e Edge que organiza a Pokédex, a Hunt, as capturas e o histórico de Shinies do Poke Idle World em um único painel.
+**Pokédex, Hunt Tracker, capturas e detector de Shinies para Poké Idle World.** Extensão independente para navegadores Chromium (Chrome e Edge), construída com Manifest V3.
+
+**Versão:** 1.2.0 · [Community Hub](https://stigalzera.com/)
 
 ## Instalação
 
-1. Extraia o ZIP e localize a pasta `community-dex-extension`.
-2. Em `chrome://extensions` ou `edge://extensions`, ative **Modo do desenvolvedor**.
-3. Selecione **Carregar sem compactação** e escolha essa pasta.
-4. Abra `https://poke.idleworld.online/play`. Clique no ícone vermelho no alto à direita ou use **Alt + P**.
+1. Extraia o ZIP e abra a pasta `community-dex-extension`.
+2. No navegador, acesse `chrome://extensions` ou `edge://extensions` e habilite **Modo do desenvolvedor**.
+3. Selecione **Carregar sem compactação** e escolha a pasta com `manifest.json`.
+4. Abra `https://poke.idleworld.online/play`. Use o ícone flutuante ou **Alt + P** para exibir o painel.
 
-**Atualização sem perder os registros:** copie os novos arquivos sobre os da mesma pasta previamente carregada e clique em **Recarregar** na página de extensões. Não remova a extensão para reinstalá-la, porque uma nova ID pode resultar em outro armazenamento local. A extensão preserva os dados anteriores no mesmo perfil/ID.
+### Atualização sem perder os dados
+
+**Importante:** sobrescreva os arquivos **na mesma pasta** usada pela extensão anterior. Depois, em `chrome://extensions`, clique em **Recarregar** na extensão Community Dex e recarregue o jogo. Não remova a extensão para reinstalá-la: uma nova identificação pode resultar em armazenamento separado.
+
+A v1.2.0 mantém a chave de armazenamento `community-dex:v1` e migra automaticamente os registros de Shiny repetidos reconhecidos.
 
 ## Recursos
 
-- **Visão Geral:** indicadores, acesso ao Community Hub, 5 atividades recentes expansíveis e botão para reiniciar a sessão.
-- **Pokédex:** leitura ao passar o mouse, imagens quando disponíveis, IV estimado, potencial, tipos, fraquezas, atributos, comparação e botão **Copiar ficha**. Histórico de 5 fichas expansível até 50. **Leitura manual** recolhida inicialmente, com modelo copiável e editável.
-- **Hunt:** XP e abates por sessão, composição da XP e calculadora recolhíveis. Loot ordenado por quantidade, mostrando 5 itens e até 50 ao expandir.
-- **Capturas:** tentativas, sucessos, taxas e histórico de 5 até 50 eventos; exportação CSV.
-- **Shinies:** contador, aviso visual, áudio opcional e histórico de 5 até 50 encontros visíveis.
-- **Ajustes:** escolha e reordene abas, controle a visibilidade dos blocos, opacidade e preferências de leitura.
+- **Visão geral:** métricas de capturas bem-sucedidas, Shinies, Hunt, atividade e link para o Community Hub; botão de zerar estatísticas.
+- **Pokédex:** leitura de tooltip, imagens, cálculo estimado de IVs, tipos, comparação, cópia de fichas, leitura manual e até 50 fichas no histórico.
+- **Hunt:** abates, XP, composição, calculadora e loot da sessão, com seções expansíveis.
+- **Capturas:** tentativas e sucessos em métricas separadas, histórico expansível e exportação CSV.
+- **Shinies:** identificação pelo catálogo de espécies, controle de duplicações do mesmo encontro, alertas opcionais e histórico expansível (5/50).
+- **Ajustes:** ordem das abas, blocos visíveis, opacidade, tamanho, avisos, botão flutuante e contador de Shinies.
 
-O ícone de acesso pode ser arrastado e mantém a posição entre sessões. A posição do painel é independente. Os registros e as preferências ficam no armazenamento local do navegador.
+### Smart Dex e Complete Dex
 
-## Desenvolvimento
+Escolha o modo em **Ajustes → Estilo da Community Dex**:
 
-Sem dependências de build ou bibliotecas em tempo de execução. A interface é construída com JavaScript e CSS próprios. Os módulos `core.js` e `main-bridge.js` concentram as rotinas de cálculo e eventos.
+| Smart Dex | Complete Dex |
+| --- | --- |
+| Painel independente com ícone flutuante arrastável | Painel amplo com cabeçalho permanente enquanto aberto |
+| Ícone e contador podem ser ocultados individualmente | Conteúdo pode ser recolhido/expandido pelo cabeçalho |
+| Mantém a posição do painel e do ícone | Arraste o cabeçalho para mover; use o canto inferior direito para redimensionar |
 
-```sh
+As posições e dimensões são salvas separadamente para cada modo. Mesmo que o ícone flutuante esteja oculto, **Alt + P** continua abrindo o painel.
+
+### Identificação de Shinies
+
+O detector usa os identificadores de espécie e localização presentes nos eventos do jogo, evitando contabilizar duas vezes o mesmo encontro quando chegam mensagens numéricas e com o nome. Procura os nomes no catálogo fornecido pelo jogo e, como alternativa, na lista de espécies da [PokéAPI](https://pokeapi.co/). Para identificadores ainda não reconhecidos, exibe `Pokémon #ID` até conseguir resolver o nome.
+
+A normalização dos registros existentes procura preservar encontros distintos. Registros em uma mesma posição com grande intervalo de tempo são mantidos separadamente.
+
+## Estrutura do projeto
+
+| Arquivo | Responsabilidade |
+| --- | --- |
+| `manifest.json` | Definição Manifest V3, permissões e pontos de entrada |
+| `app.js` / `app.css` | Interface, preferências e histórico |
+| `core.js` | Normalização dos eventos e cálculos |
+| `main-bridge.js` | Leitura passiva de eventos já recebidos pelo jogo |
+| `background.js` | Consulta e cache de dados públicos de espécies |
+| `popup.html`, `popup.js`, `manual.html` | Interface auxiliar e instruções |
+| `tests/` | Testes automatizados |
+
+**Nenhuma dependência externa de build.** Para rodar os testes locais, use Node.js 22 ou superior:
+
+```bash
 node --test tests/*.test.js
 ```
 
-A extensão não envia comandos automáticos de combate, negociação ou compra. Os resultados dependem dos eventos e das informações disponibilizados pelo jogo. Cálculos de IV e XP são estimativas, não valores garantidos pelo servidor. É necessário validar a compatibilidade em uma sessão real antes da distribuição pública e respeitar as regras de uso do jogo.
+## Privacidade e limitações
+
+O Community Dex guarda preferências e históricos localmente no navegador. Consulta dados públicos da PokéAPI para análise e identificação das espécies. Não envia credenciais, inventário pessoal ou logs de jogo para o Community Hub; também não envia comandos automáticos de combate, compra ou negociação.
+
+O funcionamento depende dos eventos que o jogo disponibiliza. As fórmulas de IV/XP são estimativas. Os testes automatizados cobrem os processamentos e a interface simulada, **não substituem testes com uma sessão autenticada nem autorização da equipe do jogo**. Respeite as regras do serviço.
 
 ## Licença
 
-MIT. Consulte [LICENSE](LICENSE).
-
-Site da comunidade: https://stigalzera.com/
+MIT — consulte [LICENSE](LICENSE).

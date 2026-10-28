@@ -1,10 +1,29 @@
 'use strict';
 const CACHE_TIME=14*86400000;
 chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
-  if(msg?.action!=='base-stats')return false;
+  if(!['base-stats','species-catalog'].includes(msg?.action))return false;
   let allowed=false;
   try{const u=new URL(sender?.url||'');allowed=u.protocol==='https:'&&u.hostname==='poke.idleworld.online';}catch{}
   if(!allowed){reply({error:'Origem não permitida'});return false;}
+  if(msg.action==='species-catalog') {
+    (async()=>{
+      const key='sd-species-catalog';
+      try{
+        const cached=(await chrome.storage.local.get(key))[key];
+        if(cached&&Date.now()-cached.savedAt<CACHE_TIME&&Array.isArray(cached.creatures)){reply({creatures:cached.creatures});return;}
+        const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),7000);
+        try{
+          const response=await fetch('https://pokeapi.co/api/v2/pokemon?limit=1302&offset=0',{signal:controller.signal,cache:'force-cache'});
+          if(!response.ok)throw Error('Catálogo indisponível');
+          const data=await response.json();
+          const creatures=(data.results||[]).map(entry=>({pokeId:Number(String(entry.url||'').match(/\/pokemon\/(\d+)\//)?.[1]),name:String(entry.name||'').slice(0,70)})).filter(entry=>Number.isInteger(entry.pokeId)&&entry.pokeId>0&&entry.name);
+          await chrome.storage.local.set({[key]:{creatures,savedAt:Date.now()}});
+          reply({creatures});
+        }finally{clearTimeout(timer);}
+      }catch(error){reply({error:String(error?.message||error).slice(0,90)});}
+    })();
+    return true;
+  }
   const raw=String(msg?.species||'').toLowerCase();
   if(!/^[a-z0-9-]{1,70}$/.test(raw)){reply({error:'Nome inválido'});return false;}
   (async()=>{

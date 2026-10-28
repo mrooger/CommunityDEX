@@ -12,7 +12,7 @@
   const SECTIONS={overview:[['overviewMetrics','Indicadores'],['overviewActivity','Atividade recente']],pokemon:[['pokemonTypes','Efetividades'],['pokemonStats','Atributos'],['pokemonManual','Leitura manual'],['pokemonHistory','Histórico de fichas']],hunt:[['huntLoot','Loot'],['huntComposition','Composição de XP'],['huntCalculator','Calculadora de XP']],captures:[['capturesBalls','Resultados por bola'],['capturesRecent','Últimas tentativas']],shiny:[['shinyDetector','Detector e áudio'],['shinyHistory','Histórico de Shinies']]};
   const DEFAULT_SECTIONS=Object.fromEntries(Object.values(SECTIONS).flat().map(([key])=>[key,true]));
   const DEFAULT_COLLAPSE={pokemonManual:false,huntComposition:false,huntCalculator:false};
-  const PREF={enabled:true,autoPokemon:true,shiny:true,sound:false,toasts:true,compact:false,ivMax:32,opacity:96,tabOrder:OPTIONAL_TABS,tabVisible:Object.fromEntries(OPTIONAL_TABS.map(id=>[id,true])),sectionVisible:DEFAULT_SECTIONS,expanded:DEFAULT_COLLAPSE};
+  const PREF={enabled:true,autoPokemon:true,shiny:true,sound:false,toasts:true,shinyBadge:true,floatingButton:true,dexMode:'smart',compact:false,ivMax:32,opacity:96,tabOrder:OPTIONAL_TABS,tabVisible:Object.fromEntries(OPTIONAL_TABS.map(id=>[id,true])),sectionVisible:DEFAULT_SECTIONS,expanded:DEFAULT_COLLAPSE};
   const XP_LABELS={base:'XP base',vip:'Bônus VIP',boost:'Bônus de XP',streak:'Bônus de sequência',event:'Bônus de evento',typeDay:'Bônus do tipo do dia',typeday:'Bônus do tipo do dia',stream:'Bônus da stream',streamer:'Bônus da stream',twitch:'Bônus da Twitch',pokedex:'Bônus da Pokédex',other:'Outros bônus'};
   const sectionShown=key=>state.prefs.sectionVisible[key]!==false;
   const sectionExpanded=key=>Boolean(state.prefs.expanded[key]);
@@ -25,16 +25,16 @@
     pokemon:null,pinned:null,history:[],base:{},basePending:new Set(),baseErrors:{},
     kills:[],totalXp:null,level:null,parts:{},loot:{},
     catches:[],shinyLog:[],shiniesSeen:new Map(),
-    feed:[],huntTarget:150,pokeTarget:100,activityExpanded:false,catchesExpanded:false,historyExpanded:false,lootExpanded:false,shinyExpanded:false,manualText:'',dockPos:null
+    feed:[],huntTarget:150,pokeTarget:100,activityExpanded:false,catchesExpanded:false,historyExpanded:false,lootExpanded:false,shinyExpanded:false,manualText:'',dockPos:null,completePos:null,completeSize:null
   };
   const now=()=>Date.now();
   const E=C.escape,F=C.format,S=C.short;
   let host,panel,dock,body,alertBox;
-  let renderTimer=null,saveTimer=null,tooltipTimer=null,lastTooltipKey='',drag=null,dockDrag=null,suppressDockClick=false;
+  let renderTimer=null,saveTimer=null,tooltipTimer=null,lastTooltipKey='',drag=null,dockDrag=null,resizeDrag=null,suppressDockClick=false;
     const persist=()=>{
     if(saveTimer)clearTimeout(saveTimer);
     saveTimer=setTimeout(()=>{
-      const record={prefs:state.prefs,pinned:state.pinned,history:state.history.slice(0,50),catches:state.catches.slice(0,400),shinyLog:state.shinyLog.slice(0,120),pos:state.pos,dockPos:state.dockPos,huntTarget:state.huntTarget,pokeTarget:state.pokeTarget};
+      const record={prefs:state.prefs,pinned:state.pinned,history:state.history.slice(0,50),catches:state.catches.slice(0,400),shinyLog:state.shinyLog.slice(0,120),pos:state.pos,dockPos:state.dockPos,completePos:state.completePos,completeSize:state.completeSize,huntTarget:state.huntTarget,pokeTarget:state.pokeTarget};
       try{chrome.storage.local.set({[STORE]:record});}catch{}
       try{sessionStorage.setItem(STORE+':hunt',JSON.stringify({kills:state.kills.slice(-1000),parts:state.parts,loot:state.loot,totalXp:state.totalXp,level:state.level}));}catch{}
     },600);
@@ -58,12 +58,29 @@
   function toast(title,sub){if(!state.prefs.toasts||!alertBox)return;const el=document.createElement('div');el.className='sd-toast';const h=document.createElement('strong');h.textContent=C.text(title,70);const p=document.createElement('span');p.textContent=C.text(sub,120);el.append(h,p);alertBox.append(el);while(alertBox.children.length>3)alertBox.firstElementChild?.remove();setTimeout(()=>el.remove(),5000);}
   function onShiny(event){
     if(!state.prefs.shiny)return;
-    const seen=state.shiniesSeen;
-    if(seen.has(event.key)&&now()-seen.get(event.key)<10*60*1000)return;
-    seen.set(event.key,now());
-    if(seen.size>600){for(const [k,t] of seen)if(now()-t>10*60*1000)seen.delete(k);}
-    state.shinyLog.unshift(event);state.shinyLog.length=Math.min(120,state.shinyLog.length);
-    log('shiny','✨ '+event.name+' detectado');toast('✨ Shiny detectado!',event.name+' • '+formatTime(event.t));audio();persist();
+    const current=C.normalizeShinyHistory([event])[0];
+    if(!current)return;
+    const t=now();
+    // Adjacent packets can describe the same encounter as a numeric ID and a name.
+    const previous=state.shinyLog.find(entry=>{
+      const old=C.normalizeShinyHistory([entry])[0];
+      const sameId=old.key===current.key;
+      const samePosition=old.position===current.position&&old.position!=='?:?';
+      const numericAlias=/^(?:\d+|Pokémon #\d+)$/i.test(String(entry.name))||/^(?:\d+|Pokémon #\d+)$/i.test(String(current.name));
+      const sameSpecies=old.speciesId&&current.speciesId?old.speciesId===current.speciesId:old.name.toLowerCase()===current.name.toLowerCase();
+      const missingPosition=old.position==='?:?'||current.position==='?:?';
+      return Math.abs(t-old.t)<30000&&(sameId||(samePosition&&numericAlias&&(!old.speciesId||!current.speciesId||sameSpecies))||(sameSpecies&&missingPosition&&Math.abs(t-old.t)<6000));
+    });
+    if(previous){
+      if(/^(?:\d+|Pokémon #\d+)$/i.test(String(previous.name))&&!/^(?:\d+|Pokémon #\d+)$/i.test(current.name))previous.name=current.name;
+      previous.key=current.key;previous.speciesId=current.speciesId||previous.speciesId;
+      persist();return;
+    }
+    if(state.shiniesSeen.has(current.key)&&t-state.shiniesSeen.get(current.key)<30000)return;
+    state.shiniesSeen.set(current.key,t);
+    if(state.shiniesSeen.size>600){for(const [k,seenAt] of state.shiniesSeen)if(t-seenAt>60000)state.shiniesSeen.delete(k);}
+    state.shinyLog.unshift(current);state.shinyLog.length=Math.min(120,state.shinyLog.length);
+    log('shiny','✨ '+current.name+' detectado');toast('✨ Shiny detectado!',current.name+' • '+formatTime(current.t));audio();persist();
   }
   function onKill(k){
     const prev=state.kills.at(-1);
@@ -109,7 +126,7 @@
     state.history=state.history.filter(v=>[v.name,v.level,v.quality,...Object.values(v.stats)].join(':')!==sig);
     state.history.unshift(p);state.history.length=Math.min(50,state.history.length);
     loadBase(p.name);
-    if(state.prefs.autoPokemon&&state.prefs.tabVisible.pokemon!==false){state.tab='pokemon';state.open=true;state.min=false;}
+    if(state.prefs.autoPokemon&&state.prefs.tabVisible.pokemon!==false&&(state.prefs.dexMode==='complete'||state.prefs.floatingButton)){state.tab='pokemon';state.open=true;state.min=false;}
     log('pokemon','Lido: '+p.name+' • Lv '+p.level);persist();scheduleRender();
   }
   // Read visible Pokémon tooltips with structured and text-only fallbacks.
@@ -237,7 +254,7 @@
       <small class="sd-note">Valores estimados a partir do nível, qualidade e atributos informados.</small>`:
       `<div class="sd-softline">${state.basePending.has(slug)?'⏳ Carregando atributos da espécie…':state.baseErrors[slug]?'Não foi possível completar a análise: '+E(state.baseErrors[slug]):'Aguardando atributos da espécie…'}</div>`;
     return `<article class="sd-pokemon-card"><div class="sd-poke-hero"><div class="sd-art-holder">${img}</div><div class="sd-grow"><div class="sd-overline">✦ FICHA DO POKÉMON</div><h3>${E(p.name)}</h3><div class="sd-sub">Lv ${F(p.level)} <span>•</span> ${E(C.qualityLabel(p.quality))} ×${F(p.quality,2)}</div><div class="sd-type-row">${types.map(t=>`<span class="sd-type" data-type="${E(C.typeCode(t)||'normal')}">${E(C.TYPE_PT[C.typeCode(t)]||t)}</span>`).join('')}</div></div></div>
-    <div class="sd-pokemon-actions">${official}${p.power!==null&&p.power!==undefined?`<span class="sd-pill sd-gold">⚡ Poder: ${F(p.power)}</span>`:''}<button type="button" class="sd-ghost sd-xs sd-copy-scanned" data-action="copy-scanned" title="Copiar esta ficha em texto editável">▣ Copiar ficha</button>${withPin?`<button class="sd-ghost sd-xs" data-action="pin">${state.pinned?.name===p.name?'✓ Fixado':'♧ Comparar'}</button>`:''}</div>
+    <div class="sd-pokemon-actions">${official}${p.power!==null&&p.power!==undefined?`<span class="sd-pill sd-gold">⚡ Poder: ${F(p.power)}</span>`:''}<button type="button" class="sd-ghost sd-xs sd-copy-scanned" data-action="copy-scanned" title="Copiar esta ficha em texto editável">▣ Copiar</button>${withPin?`<button class="sd-ghost sd-xs" data-action="pin">${state.pinned?.name===p.name?'✓ Fixado':'♧ Comparar'}</button>`:''}</div>
     ${ivHtml}
     ${sectionShown('pokemonTypes')?`<div class="sd-miniheading">⚔ Fraquezas ${matrix.weak.length?'':'· sem dados'}</div><div class="sd-tagrow">${chips(matrix.weak,'sd-weak')}</div><div class="sd-miniheading">🛡 Resistências</div><div class="sd-tagrow">${chips(matrix.resist,'sd-resist')}</div>${matrix.immune.length?`<div class="sd-miniheading">✧ Imunidades</div><div class="sd-tagrow">${chips(matrix.immune,'sd-immune')}</div>`:''}`:''}
     ${sectionShown('pokemonStats')?`<div class="sd-miniheading">✧ Atributos atuais</div><div class="sd-valuegrid">${Object.entries(C.STAT_NAMES).map(([key,label])=>`<div><small>${E(label)}</small><b>${F(p.stats?.[key])}</b></div>`).join('')}</div>`:''}</article>`;
@@ -284,12 +301,13 @@
     return `<section class="sd-stack"><div class="sd-section-head sd-top-title"><div><span class="sd-eyebrow">PERSONALIZE DO SEU JEITO</span><h3>⚙ Central de ajustes</h3></div><span class="sd-pill sd-gold">✓ Salvo</span></div>
     <div class="sd-panelcard"><div class="sd-card-heading"><span class="sd-section-icon">◫</span><div><h4>Organizar abas</h4><p>Mostre, esconda e reorganize com as setas.</p></div></div>${tabs}<p class="sd-note">A área Ajustes permanece disponível para você reorganizar o painel quando quiser.</p></div>
     <div class="sd-panelcard"><div class="sd-card-heading"><span class="sd-section-icon">✧</span><div><h4>Visibilidade dos módulos</h4><p>Escolha exatamente quais blocos aparecem em cada aba.</p></div></div>${boxes}</div>
-    <div class="sd-panelcard"><div class="sd-card-heading"><span class="sd-section-icon">◉</span><div><h4>Experiência da Pokédex</h4><p>Leitura e abertura do painel personalizáveis.</p></div></div>${toggle('enabled','Reconhecer Pokémon','Identificar fichas ao passar o mouse')}${toggle('autoPokemon','Abrir Pokédex automaticamente','Mostra a ficha dentro do Community Dex ao passar o mouse')}${toggle('toasts','Avisos na tela','Alertas visuais para eventos importantes')}</div>
+    <div class="sd-panelcard"><div class="sd-card-heading"><span class="sd-section-icon">◉</span><div><h4>Experiência da Pokédex</h4><p>Leitura e abertura do painel personalizáveis.</p></div></div>${toggle('enabled','Reconhecer Pokémon','Identificar fichas ao passar o mouse')}${toggle('autoPokemon','Abrir Pokédex automaticamente','Mostra a ficha dentro do Community Dex ao passar o mouse')}${toggle('toasts','Avisos na tela','Alertas visuais para eventos importantes')}${toggle('shinyBadge','Número de Shinies no ícone','Exibir o contador sobre o ícone da Community Dex')}${toggle('floatingButton','Botão flutuante Smart Dex','Oculta o acesso flutuante e a abertura automática no Smart Dex. Alt + P continua disponível.')}</div>
+    <div class="sd-panelcard sd-mode-card"><div class="sd-card-heading"><span class="sd-section-icon">▣</span><div><h4>Estilo da Community Dex</h4><p>Escolha como deseja acessar e visualizar seu painel.</p></div></div><div class="sd-modes"><button type="button" data-action="dex-mode" data-value="smart" class="sd-mode-option ${state.prefs.dexMode==='smart'?'active':''}" aria-pressed="${state.prefs.dexMode==='smart'}"><span class="sd-mode-symbol">◉</span><b>Smart Dex</b><small>Janela independente e compacta.</small></button><button type="button" data-action="dex-mode" data-value="complete" class="sd-mode-option ${state.prefs.dexMode==='complete'?'active':''}" aria-pressed="${state.prefs.dexMode==='complete'}"><span class="sd-mode-symbol">▤</span><b>Complete Dex</b><small>Cabeçalho fixo, conteúdo recolhível e janela redimensionável.</small></button></div><p class="sd-note">No Complete Dex, arraste o cabeçalho para mover e o canto inferior direito para ajustar largura e altura.</p></div>
     <div class="sd-panelcard"><div class="sd-card-heading"><span class="sd-section-icon">◈</span><div><h4>Aparência</h4><p>Configurações do seu painel.</p></div></div>${toggle('compact','Modo compacto','Painel mais estreito, com menos espaço')}
     <div class="sd-miniheading">Opacidade do painel · <output id="sd-opacity-label">${state.prefs.opacity}%</output></div><input type="range" min="75" max="100" step="1" value="${state.prefs.opacity}" id="sd-opacity-slider"></div>
     <div class="sd-panelcard"><h4>✦ Precisão do cálculo de IV</h4><p>Selecione o limite individual usado nas estimativas.</p><div class="sd-segments"><button class="sd-segment ${state.prefs.ivMax===31?'active':''}" data-action="max-iv" data-value="31">31 IV</button><button class="sd-segment ${state.prefs.ivMax===32?'active':''}" data-action="max-iv" data-value="32">32 IV</button></div></div>
     <div class="sd-panelcard"><div class="sd-flex"><div><h4>↻ Restaurar preferências</h4><p>Reorganiza a interface sem apagar as estatísticas.</p></div><button class="sd-ghost sd-xs" data-action="reset-preferences">Restaurar</button></div></div>
-    <div class="sd-credit">COMMUNITY DEX · v1.1.0</div></section>`;
+    <div class="sd-credit">COMMUNITY DEX · v1.2.0</div></section>`;
   }
   const toggle=(key,label,sub)=>`<div class="sd-flex sd-pref"><div><h4>${E(label)}</h4><p>${E(sub)}</p></div><label class="sd-toggle"><input type="checkbox" data-pref="${E(key)}" ${state.prefs[key]?'checked':''}><span></span></label></div>`;
   const TABS=TAB_META;
@@ -306,12 +324,14 @@
     dock.innerHTML=`<img class="sd-dock-logo" src="${E(logo)}" alt="" draggable="false"><i id="sd-dock-count"></i>`;
     dock.addEventListener('pointerdown',startDockDrag);
     dock.addEventListener('click',()=>{if(suppressDockClick){suppressDockClick=false;return;}state.open=!state.open;render();});
-    panel=document.createElement('div');panel.id='sd-panel';panel.innerHTML=`<header id="sd-titlebar"><div class="sd-brand"><div class="sd-brand-mark"><img class="sd-brand-logo" src="${E(logo)}" alt="" draggable="false"></div><div><strong>COMMUNITY <em>DEX</em></strong><span>SEU COMPANHEIRO POKÉMON</span></div></div><div class="sd-header-actions"><button id="sd-min" title="Minimizar">−</button><button id="sd-close" title="Fechar">×</button></div></header><div id="sd-statusbar"></div><nav id="sd-nav"></nav><main id="sd-body"></main><footer id="sd-footer"><span>ALT + P · Painel</span><span>Versão v1.1.0</span></footer>`;
+    panel=document.createElement('div');panel.id='sd-panel';panel.innerHTML=`<header id="sd-titlebar"><div class="sd-brand"><div class="sd-brand-mark"><img class="sd-brand-logo" src="${E(logo)}" alt="" draggable="false"></div><div><strong>COMMUNITY <em>DEX</em></strong><span>SEU COMPANHEIRO POKÉMON</span></div></div><div class="sd-header-actions"><button id="sd-min" title="Minimizar ou expandir">−</button><button id="sd-close" title="Fechar">×</button></div></header><div id="sd-statusbar"></div><nav id="sd-nav"></nav><main id="sd-body"></main><footer id="sd-footer"><span>ALT + P · Painel</span><span>Versão v1.2.0</span></footer><span id="sd-resize-grip" role="button" aria-label="Arraste para ajustar largura e altura" title="Arraste para ajustar largura e altura">◢</span>`;
     alertBox=document.createElement('div');alertBox.id='sd-alerts';
     host.append(dock,panel,alertBox);
     body=panel.querySelector('#sd-body');
     panel.querySelector('#sd-close').addEventListener('click',()=>{state.open=false;render();});
     panel.querySelector('#sd-min').addEventListener('click',()=>{state.min=!state.min;render();});
+    panel.querySelector('.sd-brand-mark').addEventListener('click',()=>{if(state.prefs.dexMode==='complete'){state.min=!state.min;render();}});
+    panel.querySelector('#sd-resize-grip').addEventListener('pointerdown',beginResize);
     panel.querySelector('#sd-nav').addEventListener('click',ev=>{const b=ev.target.closest('[data-tab]');if(!b)return;state.tab=b.dataset.tab;body.scrollTop=0;render();});
     panel.addEventListener('click',onAction);
     panel.addEventListener('error',ev=>{if(ev.target?.matches?.('.sd-artwork'))ev.target.hidden=true;},true);
@@ -319,12 +339,12 @@
     panel.addEventListener('input',onInput);
     panel.querySelector('#sd-titlebar').addEventListener('pointerdown',beginDrag);
     window.addEventListener('keydown',e=>{if(e.altKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyP'&&!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)){e.preventDefault();state.open=!state.open;render();}});
-    window.addEventListener('resize',()=>{if(state.pos)applyPos();applyDockPos();});
+    window.addEventListener('resize',()=>{if(state.prefs.dexMode==='complete')applyCompleteGeometry();else if(state.pos)applyPos();applyDockPos();});
     applyDockPos();
     render();
   }
   function startDockDrag(ev){
-    if(ev.button!==0)return;
+    if(state.prefs.dexMode==='complete'||ev.button!==0)return;
     const rect=dock.getBoundingClientRect();
     dockDrag={pointerId:ev.pointerId,startX:ev.clientX,startY:ev.clientY,left:rect.left,top:rect.top,moved:false};
     dock.setPointerCapture?.(ev.pointerId);
@@ -355,7 +375,9 @@
     dock.removeEventListener('pointercancel',cancelDockDrag);
   }
   function applyDockPos(){
-    if(!dock||!state.dockPos)return;
+    if(!dock)return;
+    if(state.prefs.dexMode==='complete'){for(const attr of ['left','top','right','bottom'])dock.style.removeProperty(attr);return;}
+    if(!state.dockPos)return;
     const w=dock.offsetWidth||64,h=dock.offsetHeight||64;
     const x=Math.max(8,Math.min(Math.max(8,innerWidth-w-8),Number(state.dockPos.x)||8));
     const y=Math.max(8,Math.min(Math.max(8,innerHeight-h-8),Number(state.dockPos.y)||8));
@@ -370,19 +392,60 @@
     const rect=panel.getBoundingClientRect();drag={x:ev.clientX,y:ev.clientY,left:rect.left,top:rect.top};
     panel.setPointerCapture?.(ev.pointerId);panel.addEventListener('pointermove',moveDrag);panel.addEventListener('pointerup',stopDrag,{once:true});panel.addEventListener('pointercancel',stopDrag,{once:true});
   }
-  function moveDrag(ev){if(!drag)return;state.pos={x:Math.max(6,Math.min(innerWidth-panel.offsetWidth-6,drag.left+ev.clientX-drag.x)),y:Math.max(6,Math.min(innerHeight-70,drag.top+ev.clientY-drag.y))};applyPos();}
+  function moveDrag(ev){if(!drag)return;const pos={x:Math.max(6,Math.min(Math.max(6,innerWidth-panel.offsetWidth-6),drag.left+ev.clientX-drag.x)),y:Math.max(6,Math.min(innerHeight-70,drag.top+ev.clientY-drag.y))};if(state.prefs.dexMode==='complete'){state.completePos=pos;applyCompleteGeometry();}else{state.pos=pos;applyPos();}}
   function stopDrag(){drag=null;panel.removeEventListener('pointermove',moveDrag);persist();}
   function applyPos(){if(!state.pos)return;panel.style.left=Math.max(6,Math.min(Math.max(6,innerWidth-panel.offsetWidth-6),state.pos.x))+'px';panel.style.top=Math.max(6,Math.min(Math.max(6,innerHeight-70),state.pos.y))+'px';panel.style.right='auto';panel.style.bottom='auto';}
+  function beginResize(event){
+    if(state.prefs.dexMode!=='complete'||state.min||event.button!==0)return;
+    event.preventDefault();event.stopPropagation();
+    const rect=panel.getBoundingClientRect();
+    resizeDrag={id:event.pointerId,x:event.clientX,y:event.clientY,width:rect.width,height:rect.height};
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.currentTarget.addEventListener('pointermove',moveResize);
+    event.currentTarget.addEventListener('pointerup',stopResize,{once:true});
+    event.currentTarget.addEventListener('pointercancel',stopResize,{once:true});
+  }
+  function moveResize(event){
+    if(!resizeDrag||resizeDrag.id!==event.pointerId)return;
+    const width=Math.max(330,Math.min(innerWidth-16,resizeDrag.width+event.clientX-resizeDrag.x));
+    const height=Math.max(255,Math.min(innerHeight-16,resizeDrag.height+event.clientY-resizeDrag.y));
+    state.completeSize={width,height};applyCompleteGeometry();
+  }
+  function stopResize(){
+    resizeDrag=null;
+    const grip=panel.querySelector('#sd-resize-grip');
+    grip.removeEventListener('pointermove',moveResize);grip.removeEventListener('pointerup',stopResize);grip.removeEventListener('pointercancel',stopResize);
+    persist();
+  }
+  function applyCompleteGeometry(){
+    if(!panel)return;
+    const size=state.completeSize||{width:540,height:750};
+    const width=Math.max(Math.min(innerWidth-16,330),Math.min(Math.max(280,innerWidth-16),size.width));
+    const height=Math.max(240,Math.min(Math.max(240,innerHeight-16),size.height));
+    const pos=state.completePos||{x:Math.max(8,innerWidth-width-140),y:12};
+    const x=Math.max(6,Math.min(Math.max(6,innerWidth-width-6),Number(pos.x)||0));
+    const y=Math.max(6,Math.min(Math.max(6,innerHeight-(state.min?65:Math.min(height,160))),Number(pos.y)||0));
+    panel.style.left=x+'px';panel.style.top=y+'px';panel.style.right='auto';panel.style.bottom='auto';
+    panel.style.width=width+'px';panel.style.height=state.min?'auto':height+'px';
+  }
+  function applySmartGeometry(){
+    panel.style.width='';panel.style.height='';panel.style.left='';panel.style.top='';panel.style.right='';panel.style.bottom='';
+    if(state.pos)applyPos();
+  }
   function render(){
     if(!host)return;
     host.dataset.compact=String(state.prefs.compact);
+    host.dataset.dexMode=state.prefs.dexMode;
     panel.style.setProperty('--sd-alpha',String(state.prefs.opacity/100));
     panel.hidden=!state.open;
     panel.classList.toggle('sd-minimized',state.min);
-    dock.querySelector('#sd-dock-count').textContent=state.shinyLog.length?String(state.shinyLog.length):'';
+    dock.querySelector('#sd-dock-count').textContent=state.prefs.shinyBadge&&state.shinyLog.length?String(state.shinyLog.length):'';
+    dock.hidden=state.open&&state.prefs.dexMode==='complete'||state.prefs.dexMode==='smart'&&!state.prefs.floatingButton;
     dock.classList.remove('sd-hide');
+    if(state.prefs.dexMode==='complete'&&!state.open){dock.hidden=false;}
+    panel.querySelector('#sd-min').textContent=state.min?'▢':'−';
     if(!activeTabs().includes(state.tab))state.tab=activeTabs()[0]||'settings';
-    panel.querySelector('#sd-statusbar').innerHTML=`<span class="sd-live-dot ${status()==='Conectado'?'sd-connected':''}"></span> ${E(status())} ${state.pokemon?`<span class="sd-status-right">${E(state.pokemon.name)}</span>`:`<a class="sd-hub-status" href="https://stigalzera.com/" target="_blank" rel="noopener noreferrer">✦ Community Hub ↗</a>`}`;
+    panel.querySelector('#sd-statusbar').innerHTML=`<span class="sd-live-dot ${status()==='Conectado'?'sd-connected':''}"></span> ${E(status())} <a class="sd-hub-status" href="https://stigalzera.com/" target="_blank" rel="noopener noreferrer">✦ Community Hub ↗</a>`;
     const nav=panel.querySelector('#sd-nav');const navScroll=nav.scrollLeft;
     nav.innerHTML=activeTabs().map(id=>{const [_,title,icon]=TABS.find(tab=>tab[0]===id);return `<button type="button" data-tab="${id}" class="${state.tab===id?'selected':''}" title="${title}"><span>${icon}</span><small>${title}</small></button>`;}).join('');nav.scrollLeft=navScroll;
     if(state.open&&!state.min&&screens[state.tab]){
@@ -390,7 +453,7 @@
       const focused=body.contains(document.activeElement)&&['INPUT','TEXTAREA'].includes(document.activeElement.tagName);
       if(!focused){const top=body.scrollTop;body.innerHTML=screens[state.tab]();body.scrollTop=top;}
     }
-    if(state.pos)applyPos();
+    if(state.prefs.dexMode==='complete')applyCompleteGeometry();else if(state.pos)applyPos();
     applyDockPos();
   }
   function onInput(ev){
@@ -424,7 +487,13 @@
       state.activityExpanded=false;state.catchesExpanded=false;state.lootExpanded=false;state.shinyExpanded=false;
       persist();render();
     }
-    else if(action==='reset-preferences'){state.prefs=structuredClone(PREF);persist();render();}
+    else if(action==='reset-preferences'){state.prefs=structuredClone(PREF);applySmartGeometry();persist();render();}
+    else if(action==='dex-mode'){
+      const next=btn.dataset.value;if(!['smart','complete'].includes(next))return;
+      state.prefs.dexMode=next;state.open=true;state.min=false;
+      if(next==='smart')applySmartGeometry();else{if(!state.completePos)state.completePos={x:Math.max(8,innerWidth-720),y:12};applyCompleteGeometry();}
+      persist();render();
+    }
     else if(action==='pin'){state.pinned=state.pokemon;persist();render();}
     else if(action==='unpin'){state.pinned=null;persist();render();}
     else if(action==='load-history'){const idx=Number(btn.dataset.index);if(state.history[idx]){state.pokemon=state.history[idx];loadBase(state.pokemon.name);render();}}
@@ -471,17 +540,41 @@
     toast(ok?title:'Cópia não permitida',ok?description:'Selecione o texto e copie manualmente.');
   }
   function download(filename,content,mime){const url=URL.createObjectURL(new Blob([content],{type:mime}));const link=document.createElement('a');link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1200);}
+  async function loadSpeciesCatalog(){
+    const update=()=>{
+      const cleaned=C.normalizeShinyHistory(state.shinyLog);
+      if(JSON.stringify(cleaned)!==JSON.stringify(state.shinyLog)){
+        state.shinyLog=cleaned;persist();scheduleRender();
+      }
+    };
+    try{
+      const response=await fetch('/game/creatures.json',{credentials:'same-origin',cache:'force-cache'});
+      if(response.ok){C.registerSpeciesCatalog(await response.json());update();}
+    }catch{}
+    try{
+      chrome.runtime.sendMessage({action:'species-catalog'},reply=>{
+        if(chrome.runtime.lastError||!Array.isArray(reply?.creatures))return;
+        C.registerSpeciesCatalog(reply.creatures);update();
+      });
+    }catch{}
+  }
   async function init(){
     try{
       const stored=await chrome.storage.local.get([STORE,LEGACY_STORE]);const saved=stored[STORE]||stored[LEGACY_STORE]||{};
       const pv=saved.prefs||{};state.prefs={...structuredClone(PREF),...pv,tabVisible:{...PREF.tabVisible,...(pv.tabVisible||{})},sectionVisible:{...PREF.sectionVisible,...(pv.sectionVisible||{})},expanded:{...PREF.expanded,...(pv.expanded||{})}};
       state.prefs.tabOrder=[...new Set([...(Array.isArray(pv.tabOrder)?pv.tabOrder:[]),...OPTIONAL_TABS])].filter(id=>OPTIONAL_TABS.includes(id));
+      if(!['smart','complete'].includes(state.prefs.dexMode))state.prefs.dexMode='smart';
       state.pinned=saved.pinned||null;
       for(const key of ['history','catches','shinyLog'])if(Array.isArray(saved[key]))state[key]=saved[key].slice(0,key==='catches'?400:120);
-      state.pos=saved.pos||null;state.dockPos=saved.dockPos||null;state.huntTarget=saved.huntTarget||150;state.pokeTarget=saved.pokeTarget||100;
+      const normalized=C.normalizeShinyHistory(state.shinyLog);
+      const changed=JSON.stringify(state.shinyLog)!==JSON.stringify(normalized);
+      state.shinyLog=normalized;
+      if(changed)persist();
+      state.pos=saved.pos||null;state.dockPos=saved.dockPos||null;state.completePos=saved.completePos||null;state.completeSize=saved.completeSize||null;
+      if(state.prefs.dexMode==='complete')state.open=true;state.huntTarget=saved.huntTarget||150;state.pokeTarget=saved.pokeTarget||100;
       try{const hunt=JSON.parse(sessionStorage.getItem(STORE+':hunt')||sessionStorage.getItem(LEGACY_STORE+':hunt')||'null');if(hunt){state.kills=Array.isArray(hunt.kills)?hunt.kills.slice(-1000):[];state.parts=hunt.parts||{};state.loot=hunt.loot||{};state.totalXp=hunt.totalXp;state.level=hunt.level;}}catch{}
     }catch{}
-    const ready=()=>{if(!document.body){document.addEventListener('DOMContentLoaded',ready,{once:true});return;}construct();initObserver();};
+    const ready=()=>{if(!document.body){document.addEventListener('DOMContentLoaded',ready,{once:true});return;}construct();initObserver();loadSpeciesCatalog();};
     ready();
   }
   init();

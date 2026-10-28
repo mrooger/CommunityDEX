@@ -132,7 +132,78 @@
     return {xpHour:Math.round(entries.slice(1).reduce((sum,k)=>sum+(Number(k.xp)||0),0)*3600000/period),killsHour:Math.round((entries.length-1)*3600000/period),activeMs};
   }
   function packetNodes(input,max=100){const queue=[input],visited=new WeakSet(),out=[];while(queue.length&&out.length<max){const item=queue.shift();if(!item||typeof item!=='object'||visited.has(item))continue;visited.add(item);out.push(item);for(const k of ['payload','data','detail','result','event','mobs','entities','monsters','pokemons','list','events']){const v=item[k];if(Array.isArray(v)) queue.push(...v.slice(0,120));else if(v&&typeof v==='object')queue.push(v);}if(Array.isArray(item))queue.push(...item.slice(0,120));}return out;}
-  function shinyFrom(packet){const arr=[];for(const item of packetNodes(packet,320)){if(!(item.shiny===true||item.isShiny===true||item.shiny_state===true))continue;if(item.dead||item.isDead||item.killed||item.respawning||item.isRespawning||item.hp===0)continue;const species=text(item.speciesName||item.pokemonName||item.name||item.species||item.speciesId||'Shiny',60);const pos=(item.row??item.y??'?')+':'+(item.col??item.x??'?');const key=String(item.id??item.mobId??(item.slot!==undefined?'slot:'+item.slot+':'+species:pos+':'+species));arr.push({name:species,key,position:pos,t:Date.now()});}return arr;}
+  const speciesById=new Map([[277,'Swellow'],[306,'Aggron'],[158,'Totodile'],[157,'Typhlosion'],[228,'Houndour']]);
+  const idBySpecies=new Map([...speciesById].map(([id,name])=>[name.toLowerCase(),id]));
+  function registerSpeciesCatalog(creatures){
+    const list=Array.isArray(creatures)?creatures:Array.isArray(creatures?.creatures)?creatures.creatures:[];
+    for(const entry of list){
+      if(!entry||typeof entry!=='object')continue;
+      const id=Number(entry.pokeId??entry.speciesId??entry.pokemonId??entry.dexId??entry.id);
+      const name=text(entry.name||entry.speciesName||entry.pokemonName||entry.displayName||'',70).trim();
+      if(Number.isInteger(id)&&id>0&&id<50000&&name&&!/^\d+$/.test(name)){
+        speciesById.set(id,name);idBySpecies.set(name.toLowerCase(),id);
+      }
+    }
+    return speciesById.size;
+  }
+  function speciesIdentity(item){
+    const possible=[item.speciesId,item.pokeId,item.pokemonId,item.species,item.speciesName,item.pokemonName,item.name];
+    const rawName=possible.find(x=>typeof x==='string'&&!/^\d+$/.test(x.trim())&&x.trim());
+    const idRaw=possible.find(x=>x!==null&&x!==undefined&&/^\d+$/.test(String(x).trim()));
+    const id=idRaw===undefined?null:Number(idRaw);
+    const label=text(rawName||speciesById.get(id)||(id?'Pokémon #'+id:'Shiny'),70);
+    const knownId=id||idBySpecies.get(label.toLowerCase())||null;
+    return {name:speciesById.get(knownId)||label,speciesId:knownId};
+  }
+  function normalizedShinyName(value){
+    const name=text(value||'Shiny',70).trim();
+    if(/^\d+$/.test(name))return speciesById.get(Number(name))||'Pokémon #'+name;
+    const unidentified=name.match(/^Pokémon #([0-9]+)$/i);
+    if(unidentified)return speciesById.get(Number(unidentified[1]))||name;
+    return name;
+  }
+  function shinyFrom(packet){
+    if(/^(?:catch|capture)[-_]?result$/i.test(String(packet?.type||packet?.event||'')))return [];
+    const byKey=new Map();
+    for(const item of packetNodes(packet,320)){
+      if(!(item.shiny===true||item.isShiny===true||item.shiny_state===true))continue;
+      if(item.dead||item.isDead||item.killed||item.respawning||item.isRespawning||Number(item.hp)===0)continue;
+      const {name,speciesId}=speciesIdentity(item);
+      const row=item.row??item.y,col=item.col??item.x;
+      const hasPos=row!==null&&row!==undefined&&col!==null&&col!==undefined;
+      const position=hasPos?String(row)+':'+String(col):'?:?';
+      const entity=item.id??item.mobId??item.slot;
+      const species=speciesId?'#'+speciesId:name.toLowerCase();
+      const key=hasPos?species+'@'+position:species+'@'+String(entity??'unknown');
+      const record={name,key,position,speciesId,t:Date.now()};
+      const existing=byKey.get(key);
+      if(!existing||(/^\d+$/.test(existing.name)&&!/^\d+$/.test(name)))byKey.set(key,record);
+    }
+    return [...byKey.values()];
+  }
+  function normalizeShinyHistory(history,windowMs=30000){
+    const out=[];
+    for(const raw of Array.isArray(history)?history:[]){
+      if(!raw||typeof raw!=='object')continue;
+      const name=normalizedShinyName(raw.name);
+      const speciesId=Number(raw.speciesId)||idBySpecies.get(name.toLowerCase())||Number(name.match(/^Pokémon #([0-9]+)$/i)?.[1])||null;
+      const timestamp=Number(raw.t)||Date.now();
+      const position=String(raw.position||'?:?');
+      const canonical=speciesId?'#'+speciesId:name.toLowerCase();
+      const entry={...raw,name,speciesId,position,key:canonical+'@'+position,t:timestamp};
+      const duplicate=out.find(x=>{
+        const delta=Math.abs(x.t-entry.t);
+        if(delta>windowMs)return false;
+        if(x.key===entry.key&&x.position===position)return true;
+        const unresolved=/^Pokémon #\d+$/i.test(x.name)||/^Pokémon #\d+$/i.test(entry.name);
+        const conflicting=x.speciesId&&entry.speciesId&&x.speciesId!==entry.speciesId;
+        return unresolved&&!conflicting&&delta<=6000&&position!=='?:?'&&x.position===position;
+      });
+      if(duplicate){if(/^(?:\d+|Pokémon #\d+)$/i.test(duplicate.name)&&!/^(?:\d+|Pokémon #\d+)$/i.test(entry.name)){duplicate.name=entry.name;duplicate.speciesId=entry.speciesId||duplicate.speciesId;}continue;}
+      out.push(entry);
+    }
+    return out.slice(0,120);
+  }
   function captureFrom(packet){const arr=[];for(const item of packetNodes(packet,75)){
     const type=text(item.type||item.event||item.action||item.kind,50).toLowerCase();
     if(!/(catch.result|catch_result|capture.result|capture_result)/.test(type))continue;
@@ -144,6 +215,6 @@
     arr.push({xp:positive(item.xpGained)??0,totalXp:positive(item.totalXp),level:positive(item.level),name:text(item.speciesName||item.pokemonName||'—',70),parts:typeof item.xpParts==='object'&&item.xpParts?Object.fromEntries(Object.entries(item.xpParts).slice(0,12).map(([k,v])=>[text(k,30),positive(v)||0])):{},loot:Array.isArray(item.loot)?item.loot.slice(0,30).map(i=>({name:text(i.name||i.itemName||i.itemId||'Item',50),qty:positive(i.qty??i.quantity)??1})):[],t:Date.now()});
   }return arr;}
   function qualityLabel(q){if(q===null||!Number.isFinite(Number(q)))return 'Indefinida';const v=Number(q);return v<1?'Fraca':v<1.1?'Comum':v<1.3?'Incomum':v<1.5?'Rara':v<1.7?'Épica':v<2?'Lendária':v<3?'Mítica':v<4?'Anciã':'Divina';}
-  scope.CommunityCore={STAT_NAMES,TYPE_PT,num,positive,text,escape,format,short,typeCode,typeMatrix,parseTooltip,formatPokemonSheet,estimateIV,normalizeName,xpForLevel,huntRates,shinyFrom,captureFrom,killFrom,qualityLabel};
+  scope.CommunityCore={STAT_NAMES,TYPE_PT,num,positive,text,escape,format,short,typeCode,typeMatrix,parseTooltip,formatPokemonSheet,estimateIV,normalizeName,xpForLevel,huntRates,shinyFrom,normalizeShinyHistory,registerSpeciesCatalog,normalizedShinyName,captureFrom,killFrom,qualityLabel};
   if(typeof module!=='undefined'&&module.exports)module.exports=scope.CommunityCore;
 })(typeof globalThis!=='undefined'?globalThis:this);
