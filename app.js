@@ -12,7 +12,7 @@
   const SECTIONS={overview:[['overviewMetrics','Indicadores'],['overviewActivity','Atividade recente']],pokemon:[['pokemonTypes','Efetividades'],['pokemonStats','Atributos'],['pokemonManual','Leitura manual'],['pokemonHistory','Histórico de fichas']],hunt:[['huntLoot','Loot'],['huntComposition','Composição de XP'],['huntCalculator','Calculadora de XP']],captures:[['capturesBalls','Resultados por bola'],['capturesRecent','Últimas tentativas']],shiny:[['shinyDetector','Detector e áudio'],['shinyHistory','Histórico de Shinies']]};
   const DEFAULT_SECTIONS=Object.fromEntries(Object.values(SECTIONS).flat().map(([key])=>[key,true]));
   const DEFAULT_COLLAPSE={pokemonManual:false,huntComposition:false,huntCalculator:false};
-  const PREF={enabled:true,autoPokemon:true,shiny:true,sound:false,toasts:true,shinyBadge:true,floatingButton:true,dexMode:'smart',compact:false,ivMax:32,opacity:96,tabOrder:OPTIONAL_TABS,tabVisible:Object.fromEntries(OPTIONAL_TABS.map(id=>[id,true])),sectionVisible:DEFAULT_SECTIONS,expanded:DEFAULT_COLLAPSE};
+  const PREF={enabled:true,autoPokemon:true,shiny:true,sound:false,toasts:true,shinyBadge:true,floatingButton:true,autoUpdateCheck:true,dexMode:'smart',compact:false,ivMax:32,opacity:96,tabOrder:OPTIONAL_TABS,tabVisible:Object.fromEntries(OPTIONAL_TABS.map(id=>[id,true])),sectionVisible:DEFAULT_SECTIONS,expanded:DEFAULT_COLLAPSE};
   const XP_LABELS={base:'XP base',vip:'Bônus VIP',boost:'Bônus de XP',streak:'Bônus de sequência',event:'Bônus de evento',typeDay:'Bônus do tipo do dia',typeday:'Bônus do tipo do dia',stream:'Bônus da stream',streamer:'Bônus da stream',twitch:'Bônus da Twitch',pokedex:'Bônus da Pokédex',other:'Outros bônus'};
   const sectionShown=key=>state.prefs.sectionVisible[key]!==false;
   const sectionExpanded=key=>Boolean(state.prefs.expanded[key]);
@@ -24,13 +24,13 @@
     prefs:structuredClone(PREF),tab:'overview',open:false,min:false,pos:null,bridge:'Aguardando',socket:'aguardando',wsMessages:0,lastPacket:0,
     pokemon:null,pinned:null,history:[],base:{},basePending:new Set(),baseErrors:{},
     kills:[],totalXp:null,level:null,parts:{},loot:{},
-    catches:[],shinyLog:[],shiniesSeen:new Map(),
-    feed:[],huntTarget:150,pokeTarget:100,activityExpanded:false,catchesExpanded:false,historyExpanded:false,lootExpanded:false,shinyExpanded:false,manualText:'',dockPos:null,completePos:null,completeSize:null
+    catches:[],shinyLog:[],shinyTracker:C.createShinyEncounterTracker(),
+    feed:[],huntTarget:150,pokeTarget:100,activityExpanded:false,catchesExpanded:false,historyExpanded:false,lootExpanded:false,shinyExpanded:false,manualText:'',dockPos:null,completePos:null,completeSize:null,update:{status:'idle',version:'',url:'',downloadUrl:'',message:'',checkedAt:0}
   };
   const now=()=>Date.now();
   const E=C.escape,F=C.format,S=C.short;
   let host,panel,dock,body,alertBox;
-  let renderTimer=null,saveTimer=null,tooltipTimer=null,lastTooltipKey='',drag=null,dockDrag=null,resizeDrag=null,suppressDockClick=false;
+  let renderTimer=null,saveTimer=null,tooltipTimer=null,lastTooltipKey='',drag=null,dockDrag=null,resizeDrag=null,suppressDockClick=false,updatePending=false,navObserver=null;
     const persist=()=>{
     if(saveTimer)clearTimeout(saveTimer);
     saveTimer=setTimeout(()=>{
@@ -56,31 +56,42 @@
   };
   function audio(){if(!state.prefs.sound)return;try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const start=ctx.currentTime;[660,990,1320].forEach((hz,i)=>{const osc=ctx.createOscillator();const gain=ctx.createGain();osc.type='sine';osc.frequency.value=hz;gain.gain.setValueAtTime(.0001,start+i*.115);gain.gain.exponentialRampToValueAtTime(.06,start+i*.115+.015);gain.gain.exponentialRampToValueAtTime(.0001,start+i*.115+.18);osc.connect(gain).connect(ctx.destination);osc.start(start+i*.115);osc.stop(start+i*.115+.2);});setTimeout(()=>ctx.close().catch(()=>{}),950);}catch{}}
   function toast(title,sub){if(!state.prefs.toasts||!alertBox)return;const el=document.createElement('div');el.className='sd-toast';const h=document.createElement('strong');h.textContent=C.text(title,70);const p=document.createElement('span');p.textContent=C.text(sub,120);el.append(h,p);alertBox.append(el);while(alertBox.children.length>3)alertBox.firstElementChild?.remove();setTimeout(()=>el.remove(),5000);}
-  function onShiny(event){
+  function onShiny(raw){
     if(!state.prefs.shiny)return;
-    const current=C.normalizeShinyHistory([event])[0];
+    const current=C.normalizeShinyHistory([raw])[0];
     if(!current)return;
-    const t=now();
-    // Adjacent packets can describe the same encounter as a numeric ID and a name.
-    const previous=state.shinyLog.find(entry=>{
-      const old=C.normalizeShinyHistory([entry])[0];
-      const sameId=old.key===current.key;
-      const samePosition=old.position===current.position&&old.position!=='?:?';
-      const numericAlias=/^(?:\d+|Pokémon #\d+)$/i.test(String(entry.name))||/^(?:\d+|Pokémon #\d+)$/i.test(String(current.name));
-      const sameSpecies=old.speciesId&&current.speciesId?old.speciesId===current.speciesId:old.name.toLowerCase()===current.name.toLowerCase();
-      const missingPosition=old.position==='?:?'||current.position==='?:?';
-      return Math.abs(t-old.t)<30000&&(sameId||(samePosition&&numericAlias&&(!old.speciesId||!current.speciesId||sameSpecies))||(sameSpecies&&missingPosition&&Math.abs(t-old.t)<6000));
-    });
-    if(previous){
-      if(/^(?:\d+|Pokémon #\d+)$/i.test(String(previous.name))&&!/^(?:\d+|Pokémon #\d+)$/i.test(current.name))previous.name=current.name;
-      previous.key=current.key;previous.speciesId=current.speciesId||previous.speciesId;
-      persist();return;
+    const observation=state.shinyTracker.observe(current,now());
+    if(!observation.isNew){
+      // Resolve a previously unknown species without creating another record.
+      let repaired=false;
+      if(!/^(?:\d+|Pokémon #\d+)$/i.test(current.name)){
+        const existing=state.shinyLog.find(item=>
+          (item.speciesId&&current.speciesId&&item.speciesId===current.speciesId)||
+          (item.position!=='?:?'&&item.position===current.position&&
+           Math.abs(now()-Number(item.t))<10*60*1000)
+        );
+        if(existing&&/^(?:\d+|Pokémon #\d+)$/i.test(existing.name)){
+          existing.name=current.name;
+          existing.speciesId=existing.speciesId||current.speciesId;
+          repaired=true;
+        }
+      }
+      const updated=C.normalizeShinyHistory(state.shinyLog);
+      if(repaired||JSON.stringify(updated)!==JSON.stringify(state.shinyLog)){
+        state.shinyLog=updated;persist();scheduleRender();
+      }
+      return;
     }
-    if(state.shiniesSeen.has(current.key)&&t-state.shiniesSeen.get(current.key)<30000)return;
-    state.shiniesSeen.set(current.key,t);
-    if(state.shiniesSeen.size>600){for(const [k,seenAt] of state.shiniesSeen)if(t-seenAt>60000)state.shiniesSeen.delete(k);}
-    state.shinyLog.unshift(current);state.shinyLog.length=Math.min(120,state.shinyLog.length);
-    log('shiny','✨ '+current.name+' detectado');toast('✨ Shiny detectado!',current.name+' • '+formatTime(current.t));audio();persist();
+    const updated=C.normalizeShinyHistory([current,...state.shinyLog]);
+    if(updated.length<=state.shinyLog.length){
+      state.shinyLog=updated;
+      persist();
+      return;
+    }
+    state.shinyLog=updated;
+    log('shiny','✨ '+current.name+' detectado');
+    toast('✨ Shiny detectado!',current.name+' • '+formatTime(current.t));
+    audio();persist();
   }
   function onKill(k){
     const prev=state.kills.at(-1);
@@ -294,11 +305,68 @@
      ${sectionShown('shinyHistory')?`<div class="sd-section-head"><h3>Histórico de encontros</h3><button class="sd-ghost sd-xs" data-action="clear-shiny">Limpar histórico</button></div>
      ${state.shinyLog.length?state.shinyLog.slice(0,state.shinyExpanded?50:5).map(s=>`<div class="sd-event sd-shinyevent"><span class="sd-event-icon">✦</span><span><b>${E(s.name)}</b><small> · ${E(s.position)}</small></span><time>${formatDate(s.t)}</time></div>`).join(''):empty('Nenhum Shiny visto desde a instalação.','✦')}${buttonMore('show-more-shinies',state.shinyExpanded,Math.min(state.shinyLog.length,50),5)}`:''}
     </section>`;}
+  const INSTALLED_VERSION=chrome.runtime.getManifest().version;
+  const compareVersions=(a,b)=>{
+    const left=String(a||'').replace(/^v/i,'').split('.').map(Number);
+    const right=String(b||'').replace(/^v/i,'').split('.').map(Number);
+    for(let index=0;index<Math.max(left.length,right.length,3);index++){
+      const diff=(left[index]||0)-(right[index]||0);
+      if(diff)return Math.sign(diff);
+    }
+    return 0;
+  };
+  function updatePanel(){
+    const info=state.update;
+    const newer=info.status==='ok'&&compareVersions(info.version,INSTALLED_VERSION)>0;
+    const ahead=info.status==='ok'&&compareVersions(info.version,INSTALLED_VERSION)<0;
+    const pill=info.status==='checking'?'<span class="sd-pill">Consultando…</span>':newer?'<span class="sd-pill sd-gold">✦ Nova versão</span>':ahead?`<span class="sd-pill sd-green">v${E(INSTALLED_VERSION)}</span>`:info.status==='ok'?'<span class="sd-pill sd-green">✓ Atualizado</span>':'<span class="sd-pill">GitHub</span>';
+    let details='<p>Consulte as versões oficiais publicadas no GitHub.</p>';
+    if(info.status==='checking')details='<p>Procurando a última versão publicada…</p>';
+    if(info.status==='error')details=`<p class="sd-update-error">${E(info.message||'Não foi possível verificar agora.')}</p>`;
+    if(info.status==='ok')details=newer?`<p>Versão <b>${E(info.version)}</b> disponível. Veja as novidades e baixe o pacote oficial.</p>`:ahead?`<p>Você está usando a v${E(INSTALLED_VERSION)}, mais nova que o último release público (${E(info.version)}).</p>`:`<p>Você está na versão mais recente publicada (${E(info.version)}).</p>`;
+    return `<div class="sd-panelcard sd-update-card"><div class="sd-card-heading"><span class="sd-section-icon">↻</span><div class="sd-grow"><h4>Atualizações</h4><p>Versão instalada: <b>v${E(INSTALLED_VERSION)}</b></p></div>${pill}</div>
+      ${details}
+      <div class="sd-update-actions"><button type="button" class="sd-btn" data-action="check-updates" ${info.status==='checking'?'disabled':''}>↻ Verificar agora</button>${newer&&info.downloadUrl?'<button type="button" class="sd-ghost" data-action="download-update">↓ Baixar ZIP</button>':''}<button type="button" class="sd-ghost" data-action="open-release">↗ GitHub</button></div>
+      ${toggle('autoUpdateCheck','Verificar automaticamente','Consulta novas versões ao abrir o jogo e periodicamente.')}
+      <p class="sd-update-note">Instalação por pasta: para aplicar uma nova versão, substitua os arquivos e recarregue a extensão em chrome://extensions. O navegador não instala ZIPs do GitHub automaticamente.</p></div>`;
+  }
+  function checkUpdates(force=false){
+    if(updatePending)return;
+    updatePending=true;
+    state.update={...state.update,status:'checking',message:''};
+    if(state.tab==='settings')scheduleRender();
+    try{
+      chrome.runtime.sendMessage({action:'check-update',force},response=>{
+        updatePending=false;
+        if(chrome.runtime.lastError||!response||response.error){
+          state.update={...state.update,status:'error',message:response?.error||'Não foi possível consultar o GitHub.'};
+        }else{
+          state.update={status:'ok',version:response.version,url:response.url,downloadUrl:response.downloadUrl||'',checkedAt:Date.now(),message:''};
+        }
+        if(state.tab==='settings')scheduleRender();
+      });
+    }catch{
+      updatePending=false;
+      state.update={...state.update,status:'error',message:'Serviço de atualizações indisponível.'};
+      if(state.tab==='settings')scheduleRender();
+    }
+  }
+  function openUpdatePage(download=false){
+    const target=download&&state.update.downloadUrl?state.update.downloadUrl:state.update.url||'https://github.com/mrooger/CommunityDEX/releases';
+    if(!/^https:\/\/github\.com\/mrooger\/CommunityDEX\/releases(?:\/|$)/.test(target))return;
+    window.open(target,'_blank','noopener,noreferrer');
+  }
+  function updateNavDensity(){
+    if(!panel)return;
+    const width=panel.getBoundingClientRect().width;
+    panel.dataset.navDensity=width<=352?'tiny':width<=450?'compact':'normal';
+  }
   function settings(){
     const order=state.prefs.tabOrder.filter(id=>OPTIONAL_TABS.includes(id));
     const tabs=order.map((id,i)=>{const [_,title,ico]=TAB_META.find(row=>row[0]===id);return `<div class="sd-order-row"><span class="sd-order-icon">${ico}</span><span class="sd-grow">${E(title)}</span><label class="sd-toggle"><input type="checkbox" data-tab-visible="${id}" ${state.prefs.tabVisible[id]!==false?'checked':''} aria-label="Exibir ${E(title)}"><span></span></label><button data-action="tab-up" data-value="${id}" title="Mover para cima" ${i===0?'disabled':''}>↑</button><button data-action="tab-down" data-value="${id}" title="Mover para baixo" ${i===order.length-1?'disabled':''}>↓</button></div>`;}).join('');
     const boxes=Object.entries(SECTIONS).map(([id,fields])=>{const title=TAB_META.find(row=>row[0]===id)?.[1]||id;return `<div class="sd-options-group"><h4>${E(title)}</h4>${fields.map(([key,label])=>`<label class="sd-opt-row"><input type="checkbox" data-section-visible="${E(key)}" ${sectionShown(key)?'checked':''}><span>${E(label)}</span></label>`).join('')}</div>`;}).join('');
     return `<section class="sd-stack"><div class="sd-section-head sd-top-title"><div><span class="sd-eyebrow">PERSONALIZE DO SEU JEITO</span><h3>⚙ Central de ajustes</h3></div><span class="sd-pill sd-gold">✓ Salvo</span></div>
+    ${updatePanel()}
     <div class="sd-panelcard"><div class="sd-card-heading"><span class="sd-section-icon">◫</span><div><h4>Organizar abas</h4><p>Mostre, esconda e reorganize com as setas.</p></div></div>${tabs}<p class="sd-note">A área Ajustes permanece disponível para você reorganizar o painel quando quiser.</p></div>
     <div class="sd-panelcard"><div class="sd-card-heading"><span class="sd-section-icon">✧</span><div><h4>Visibilidade dos módulos</h4><p>Escolha exatamente quais blocos aparecem em cada aba.</p></div></div>${boxes}</div>
     <div class="sd-panelcard"><div class="sd-card-heading"><span class="sd-section-icon">◉</span><div><h4>Experiência da Pokédex</h4><p>Leitura e abertura do painel personalizáveis.</p></div></div>${toggle('enabled','Reconhecer Pokémon','Identificar fichas ao passar o mouse')}${toggle('autoPokemon','Abrir Pokédex automaticamente','Mostra a ficha dentro do Community Dex ao passar o mouse')}${toggle('toasts','Avisos na tela','Alertas visuais para eventos importantes')}${toggle('shinyBadge','Número de Shinies no ícone','Exibir o contador sobre o ícone da Community Dex')}${toggle('floatingButton','Botão flutuante Smart Dex','Oculta o acesso flutuante e a abertura automática no Smart Dex. Alt + P continua disponível.')}</div>
@@ -307,7 +375,7 @@
     <div class="sd-miniheading">Opacidade do painel · <output id="sd-opacity-label">${state.prefs.opacity}%</output></div><input type="range" min="75" max="100" step="1" value="${state.prefs.opacity}" id="sd-opacity-slider"></div>
     <div class="sd-panelcard"><h4>✦ Precisão do cálculo de IV</h4><p>Selecione o limite individual usado nas estimativas.</p><div class="sd-segments"><button class="sd-segment ${state.prefs.ivMax===31?'active':''}" data-action="max-iv" data-value="31">31 IV</button><button class="sd-segment ${state.prefs.ivMax===32?'active':''}" data-action="max-iv" data-value="32">32 IV</button></div></div>
     <div class="sd-panelcard"><div class="sd-flex"><div><h4>↻ Restaurar preferências</h4><p>Reorganiza a interface sem apagar as estatísticas.</p></div><button class="sd-ghost sd-xs" data-action="reset-preferences">Restaurar</button></div></div>
-    <div class="sd-credit">COMMUNITY DEX · v1.2.0</div></section>`;
+    <div class="sd-credit">COMMUNITY DEX · v1.3.0</div></section>`;
   }
   const toggle=(key,label,sub)=>`<div class="sd-flex sd-pref"><div><h4>${E(label)}</h4><p>${E(sub)}</p></div><label class="sd-toggle"><input type="checkbox" data-pref="${E(key)}" ${state.prefs[key]?'checked':''}><span></span></label></div>`;
   const TABS=TAB_META;
@@ -324,7 +392,7 @@
     dock.innerHTML=`<img class="sd-dock-logo" src="${E(logo)}" alt="" draggable="false"><i id="sd-dock-count"></i>`;
     dock.addEventListener('pointerdown',startDockDrag);
     dock.addEventListener('click',()=>{if(suppressDockClick){suppressDockClick=false;return;}state.open=!state.open;render();});
-    panel=document.createElement('div');panel.id='sd-panel';panel.innerHTML=`<header id="sd-titlebar"><div class="sd-brand"><div class="sd-brand-mark"><img class="sd-brand-logo" src="${E(logo)}" alt="" draggable="false"></div><div><strong>COMMUNITY <em>DEX</em></strong><span>SEU COMPANHEIRO POKÉMON</span></div></div><div class="sd-header-actions"><button id="sd-min" title="Minimizar ou expandir">−</button><button id="sd-close" title="Fechar">×</button></div></header><div id="sd-statusbar"></div><nav id="sd-nav"></nav><main id="sd-body"></main><footer id="sd-footer"><span>ALT + P · Painel</span><span>Versão v1.2.0</span></footer><span id="sd-resize-grip" role="button" aria-label="Arraste para ajustar largura e altura" title="Arraste para ajustar largura e altura">◢</span>`;
+    panel=document.createElement('div');panel.id='sd-panel';panel.innerHTML=`<header id="sd-titlebar"><div class="sd-brand"><div class="sd-brand-mark"><img class="sd-brand-logo" src="${E(logo)}" alt="" draggable="false"></div><div><strong>COMMUNITY <em>DEX</em></strong><span>SUA FERRAMENTA POKÉMON</span></div></div><div class="sd-header-actions"><button id="sd-min" title="Minimizar ou expandir">−</button><button id="sd-close" title="Fechar">×</button></div></header><div id="sd-statusbar"></div><nav id="sd-nav"></nav><main id="sd-body"></main><footer id="sd-footer"><span>ALT + P · Painel</span><span>Versão v1.3.0</span></footer><span id="sd-resize-grip" role="button" aria-label="Arraste para ajustar largura e altura" title="Arraste para ajustar largura e altura">◢</span>`;
     alertBox=document.createElement('div');alertBox.id='sd-alerts';
     host.append(dock,panel,alertBox);
     body=panel.querySelector('#sd-body');
@@ -338,10 +406,13 @@
     panel.addEventListener('change',onChange);
     panel.addEventListener('input',onInput);
     panel.querySelector('#sd-titlebar').addEventListener('pointerdown',beginDrag);
+    if(typeof ResizeObserver!=='undefined'){navObserver=new ResizeObserver(updateNavDensity);navObserver.observe(panel);}
     window.addEventListener('keydown',e=>{if(e.altKey&&!e.ctrlKey&&!e.metaKey&&e.code==='KeyP'&&!['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)){e.preventDefault();state.open=!state.open;render();}});
     window.addEventListener('resize',()=>{if(state.prefs.dexMode==='complete')applyCompleteGeometry();else if(state.pos)applyPos();applyDockPos();});
     applyDockPos();
     render();
+    if(state.prefs.autoUpdateCheck)checkUpdates();
+    setInterval(()=>{if(state.prefs.autoUpdateCheck)checkUpdates();},6*60*60*1000);
   }
   function startDockDrag(ev){
     if(state.prefs.dexMode==='complete'||ev.button!==0)return;
@@ -446,7 +517,9 @@
     panel.querySelector('#sd-min').textContent=state.min?'▢':'−';
     if(!activeTabs().includes(state.tab))state.tab=activeTabs()[0]||'settings';
     panel.querySelector('#sd-statusbar').innerHTML=`<span class="sd-live-dot ${status()==='Conectado'?'sd-connected':''}"></span> ${E(status())} <a class="sd-hub-status" href="https://stigalzera.com/" target="_blank" rel="noopener noreferrer">✦ Community Hub ↗</a>`;
+    updateNavDensity();
     const nav=panel.querySelector('#sd-nav');const navScroll=nav.scrollLeft;
+    nav.style.setProperty('--sd-tab-count',String(activeTabs().length));
     nav.innerHTML=activeTabs().map(id=>{const [_,title,icon]=TABS.find(tab=>tab[0]===id);return `<button type="button" data-tab="${id}" class="${state.tab===id?'selected':''}" title="${title}"><span>${icon}</span><small>${title}</small></button>`;}).join('');nav.scrollLeft=navScroll;
     if(state.open&&!state.min&&screens[state.tab]){
       // Do not replace focused inputs while users are typing.
@@ -464,7 +537,7 @@
   }
   function onChange(ev){
     const target=ev.target;const pref=target?.dataset?.pref;
-    if(pref&&pref in PREF&&typeof PREF[pref]==='boolean'){state.prefs[pref]=target.checked;persist();scheduleRender();return;}
+    if(pref&&pref in PREF&&typeof PREF[pref]==='boolean'){state.prefs[pref]=target.checked;if(pref==='autoUpdateCheck'&&target.checked)checkUpdates();persist();scheduleRender();return;}
     if(target?.dataset?.tabVisible){const id=target.dataset.tabVisible;if(!OPTIONAL_TABS.includes(id))return;state.prefs.tabVisible[id]=target.checked;persist();scheduleRender();return;}
     if(target?.dataset?.sectionVisible){const id=target.dataset.sectionVisible;if(!(id in DEFAULT_SECTIONS))return;state.prefs.sectionVisible[id]=target.checked;persist();scheduleRender();}
   }
@@ -483,10 +556,13 @@
     }
     else if(action==='reset-overview'){
       if(!confirm('Zerar estatísticas de capturas, Shinies, hunt e atividades recentes? Suas preferências e fichas da Pokédex serão mantidas.'))return;
-      state.catches=[];state.shinyLog=[];state.shiniesSeen.clear();state.kills=[];state.totalXp=null;state.level=null;state.parts={};state.loot={};state.feed=[];
+      state.catches=[];state.shinyLog=[];state.shinyTracker.reset();state.kills=[];state.totalXp=null;state.level=null;state.parts={};state.loot={};state.feed=[];
       state.activityExpanded=false;state.catchesExpanded=false;state.lootExpanded=false;state.shinyExpanded=false;
       persist();render();
     }
+    else if(action==='check-updates'){checkUpdates(true);}
+    else if(action==='open-release'){openUpdatePage(false);}
+    else if(action==='download-update'){openUpdatePage(true);}
     else if(action==='reset-preferences'){state.prefs=structuredClone(PREF);applySmartGeometry();persist();render();}
     else if(action==='dex-mode'){
       const next=btn.dataset.value;if(!['smart','complete'].includes(next))return;
@@ -512,7 +588,7 @@
     }
     else if(action==='reset-hunt'){if(!confirm('Zerar os dados da hunt atual?'))return;state.kills=[];state.parts={};state.loot={};state.totalXp=null;state.level=null;persist();render();}
     else if(action==='clear-catches'){if(!confirm('Apagar o histórico de capturas?'))return;state.catches=[];persist();render();}
-    else if(action==='clear-shiny'){if(!confirm('Apagar o histórico de Shinies?'))return;state.shinyLog=[];state.shiniesSeen.clear();persist();render();}
+    else if(action==='clear-shiny'){if(!confirm('Apagar o histórico de Shinies?'))return;state.shinyLog=[];state.shinyTracker.reset();persist();render();}
     else if(action==='max-iv'){state.prefs.ivMax=Number(btn.dataset.value)===31?31:32;persist();render();}
     else if(action==='calculate-xp'){
       const current=Math.floor(Number(body.querySelector('#sd-xp-from')?.value)||1),target=Math.floor(Number(body.querySelector('#sd-xp-to')?.value)||1);
@@ -569,6 +645,7 @@
       const normalized=C.normalizeShinyHistory(state.shinyLog);
       const changed=JSON.stringify(state.shinyLog)!==JSON.stringify(normalized);
       state.shinyLog=normalized;
+      state.shinyTracker.prime(normalized);
       if(changed)persist();
       state.pos=saved.pos||null;state.dockPos=saved.dockPos||null;state.completePos=saved.completePos||null;state.completeSize=saved.completeSize||null;
       if(state.prefs.dexMode==='complete')state.open=true;state.huntTarget=saved.huntTarget||150;state.pokeTarget=saved.pokeTarget||100;

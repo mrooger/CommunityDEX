@@ -283,7 +283,7 @@
 
 /* Community Dex 1.2 — adaptive Smart / Complete presentation */
 #sd-dock[hidden],#sd-panel[hidden]{display:none!important}
-#sd-panel .sd-pokemon-actions{flex-wrap:nowrap!important;gap:5px!important;align-items:center;justify-content:flex-start;min-width:0}
+#sd-panel .sd-pokemon-actions{flex-wrap:wrap!important;gap:5px!important;align-items:center;justify-content:flex-start;min-width:0;max-width:100%}
 #sd-panel .sd-pokemon-actions .sd-pill{flex:0 0 auto;margin:0;font-size:9px;padding:5px 6px;white-space:nowrap}
 #sd-panel .sd-pokemon-actions button{margin:0!important;flex:0 0 auto!important;padding:5px 6px;font-size:9px;white-space:nowrap;line-height:1.2;min-height:26px}
 #sd-panel .sd-pokemon-actions .sd-copy-scanned{font-weight:800}
@@ -315,3 +315,56 @@
 #community-dex-root[data-dex-mode="complete"] #sd-dock[hidden]{display:none!important}
 #community-dex-root[data-dex-mode="complete"] #sd-dock-count{top:-7px;right:-7px}
 @media(max-width:475px){#sd-panel .sd-pokemon-actions{gap:3px!important}#sd-panel .sd-pokemon-actions button{font-size:8px;padding:4px 4px}#sd-panel .sd-pokemon-actions .sd-pill{font-size:8px;padding:4px 4px}#community-dex-root[data-dex-mode="complete"] #sd-panel #sd-body{padding:12px 10px 20px}}
+
+/* Community Dex 1.3 · Responsive navigation based on panel width */
+#sd-panel #sd-nav,
+#community-dex-root[data-dex-mode="complete"] #sd-panel #sd-nav{
+  display:grid!important;
+  grid-template-columns:repeat(var(--sd-tab-count,6),minmax(0,1fr));
+  align-items:stretch;
+  justify-content:stretch;
+  gap:5px!important;
+  padding:8px 10px 9px;
+  overflow-x:hidden;
+}
+#sd-panel #sd-nav button,
+#community-dex-root[data-dex-mode="complete"] #sd-panel #sd-nav button{
+  flex:none!important;min-width:0!important;max-width:none!important;width:100%;
+  padding:7px 1px 6px;gap:2px;
+}
+#sd-panel #sd-nav button small{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#sd-panel[data-nav-density="compact"] #sd-titlebar{min-height:61px!important;padding:10px 12px!important}
+#sd-panel[data-nav-density="compact"] .sd-brand-mark{width:34px;height:34px;flex:0 0 34px}
+#sd-panel[data-nav-density="compact"] .sd-brand{gap:8px;min-width:0}
+#sd-panel[data-nav-density="compact"] .sd-brand strong{font-size:14px!important;letter-spacing:0}
+#sd-panel[data-nav-density="compact"] .sd-brand span{font-size:7px!important;letter-spacing:.8px;margin-top:2px}
+#sd-panel[data-nav-density="compact"] #sd-statusbar{height:27px;padding:0 12px;font-size:9px}
+#sd-panel[data-nav-density="compact"] #sd-statusbar .sd-hub-status{font-size:9px}
+#sd-panel[data-nav-density="compact"] #sd-nav{gap:3px!important;padding:7px 7px 8px!important}
+#sd-panel[data-nav-density="compact"] #sd-nav button{padding:5px 0 4px!important;border-radius:9px;min-height:47px}
+#sd-panel[data-nav-density="compact"] #sd-nav button span{font-size:16px;line-height:18px}
+#sd-panel[data-nav-density="compact"] #sd-nav button small{font-size:8px;letter-spacing:-.25px}
+#sd-panel[data-nav-density="tiny"] #sd-titlebar{min-height:55px!important;padding:8px 9px!important}
+#sd-panel[data-nav-density="tiny"] .sd-brand-mark{width:30px;height:30px;flex:0 0 30px}
+#sd-panel[data-nav-density="tiny"] .sd-brand{gap:6px;min-width:0}
+#sd-panel[data-nav-density="tiny"] .sd-brand strong{font-size:12px!important;letter-spacing:-.4px}
+#sd-panel[data-nav-density="tiny"] .sd-brand span{font-size:6.5px!important;letter-spacing:.1px;margin-top:1px}
+#sd-panel[data-nav-density="tiny"] #sd-statusbar{height:25px;padding:0 9px;font-size:9px}
+#sd-panel[data-nav-density="tiny"] #sd-statusbar .sd-hub-status{font-size:9px}
+#sd-panel[data-nav-density="tiny"] #sd-nav{gap:2px!important;padding:5px 5px 6px!important}
+#sd-panel[data-nav-density="tiny"] #sd-nav button{padding:4px 0!important;border-radius:8px;min-height:40px}
+#sd-panel[data-nav-density="tiny"] #sd-nav button span{font-size:16px;line-height:17px}
+#sd-panel[data-nav-density="tiny"] #sd-nav button small{font-size:7px;letter-spacing:-.35px}
+#sd-panel .sd-update-card{border:1px solid #ffb57b58;background:linear-gradient(145deg,#f7a35e1a,#1d2840 50%,#161f32);}
+#sd-panel .sd-update-card .sd-card-heading{gap:9px}
+#sd-panel .sd-update-card .sd-card-heading h4{font-size:14px;color:#fff}
+#sd-panel .sd-update-card .sd-card-heading p{font-size:10px;margin:2px 0 0;color:#b4c1d8}
+#sd-panel .sd-update-actions{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+#sd-panel .sd-update-actions button{min-height:34px;flex:1 0 90px;margin:0;font-size:10px}
+#sd-panel .sd-update-card .sd-update-note{font-size:10px;color:#9bacbf;border-top:1px solid #ffffff18;padding-top:12px;margin:7px 0 0;line-height:1.5}
+#sd-panel .sd-update-card .sd-update-error{color:#ffc4a3}
+#sd-panel .sd-update-card .sd-pref{margin-top:12px}
+
+/* Keep Pokédex controls visible when the panel is resized to its minimum width. */
+#sd-panel .sd-pokemon-actions>.sd-pill{max-width:100%;overflow-wrap:anywhere;white-space:normal}
+#sd-panel .sd-pokemon-actions>button{max-width:100%}

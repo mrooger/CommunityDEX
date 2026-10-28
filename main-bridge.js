@@ -17,7 +17,10 @@
     const packetType=raw.match(/"(?:type|event|kind)"\s*:\s*"([^"\\]{1,65})"/)?.[1]?.toLowerCase()||'';
     const hasShiny=/"(?:shiny|isShiny|shiny_state)"\s*:\s*true\b/.test(raw);
     const trackedType=/^(field-kill|poke-xp|catch-result|catch_result|capture-result|capture_result|analyzer|field)$/.test(packetType);
-    if(!trackedType&&!hasShiny)return;
+    const mapType=/^(?:field|map|spawn)(?:[-_](?:state|update|sync|mobs|monsters|entities|snapshot|refresh|enter|spawn|batch))?$/.test(packetType);
+    const mapCollection=/"(?:mobs|monsters|entities)"\s*:\s*\[/.test(raw);
+    const nonMap=/^(?:inventory|pokes|pokemon|party|character|catch|capture|field-kill|poke-xp|market|shop|battle|combat|attack|analyzer)/.test(packetType);
+    if(!trackedType&&!(hasShiny&&(mapType||(mapCollection&&!nonMap))))return;
     if(packetType==='field'&&!hasShiny)return;
     let parsed;try{parsed=JSON.parse(raw);}catch{return;}
     // Do not forward authentication, inventory, character or profile packets.

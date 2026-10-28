@@ -22,4 +22,10 @@ test('MAIN WebSocket bridge monitors received packets without changing their con
  assert.equal(sent.find(x=>x.message.type==='packet').origin,'https://poke.idleworld.online');
  gameSocket.emit('message',JSON.stringify({type:'tokens',refreshToken:'sensitive'}));
  assert.equal(sent.filter(x=>x.message.type==='packet').length,1);
+ // Shiny flags on the player's inventory must not be treated as map sightings.
+ gameSocket.emit('message',JSON.stringify({type:'inventory',list:[{speciesId:277,shiny:true}]}));
+ assert.equal(sent.filter(x=>x.message.type==='packet').length,1);
+ // Map envelopes without a top-level type are still supported.
+ gameSocket.emit('message',JSON.stringify({mobs:[{speciesId:277,shiny:true,row:2,col:3,hp:20}]}));
+ assert.equal(sent.filter(x=>x.message.type==='packet').length,2);
 });

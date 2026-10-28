@@ -1,10 +1,46 @@
 'use strict';
 const CACHE_TIME=14*86400000;
+const RELEASES_URL='https://api.github.com/repos/mrooger/CommunityDEX/releases/latest';
+const RELEASES_PAGE='https://github.com/mrooger/CommunityDEX/releases';
+const UPDATE_CACHE_MS=30*60*1000;
+let releaseCache=null;
+let releasePending=null;
+function parseRelease(data){
+  const version=String(data?.tag_name||'').replace(/^v/i,'');
+  if(!/^\d+\.\d+\.\d+$/.test(version))throw Error('Versão não reconhecida');
+  const url=String(data?.html_url||'');
+  if(!/^https:\/\/github\.com\/mrooger\/CommunityDEX\/releases\/tag\/v?\d+\.\d+\.\d+$/.test(url))throw Error('Endereço de release inválido');
+  const asset=(Array.isArray(data.assets)?data.assets:[]).find(item=>{
+    const link=String(item.browser_download_url||'');
+    return /^https:\/\/github\.com\/mrooger\/CommunityDEX\/releases\/download\/v?\d+\.\d+\.\d+\/[^\/?#]+\.zip$/i.test(link);
+  });
+  return {version:'v'+version,url,downloadUrl:asset?.browser_download_url||''};
+}
+async function getRelease(force){
+  if(!force&&releaseCache&&Date.now()-releaseCache.savedAt<UPDATE_CACHE_MS)return releaseCache.data;
+  if(releasePending)return releasePending;
+  releasePending=(async()=>{
+    const ctrl=new AbortController();const timeout=setTimeout(()=>ctrl.abort(),8500);
+    try{
+      const response=await fetch(RELEASES_URL,{headers:{Accept:'application/vnd.github+json'},signal:ctrl.signal,cache:'no-store'});
+      if(!response.ok)throw Error(response.status===403?'Limite de consultas atingido. Tente mais tarde.':'GitHub indisponível (HTTP '+response.status+')');
+      const data=parseRelease(await response.json());
+      releaseCache={data,savedAt:Date.now()};
+      return data;
+    }finally{clearTimeout(timeout);releasePending=null;}
+  })();
+  return releasePending;
+}
+
 chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
-  if(!['base-stats','species-catalog'].includes(msg?.action))return false;
+  if(!['base-stats','species-catalog','check-update'].includes(msg?.action))return false;
   let allowed=false;
   try{const u=new URL(sender?.url||'');allowed=u.protocol==='https:'&&u.hostname==='poke.idleworld.online';}catch{}
   if(!allowed){reply({error:'Origem não permitida'});return false;}
+  if(msg.action==='check-update'){
+    getRelease(Boolean(msg.force)).then(reply).catch(e=>reply({error:String(e.message||e).slice(0,140),url:RELEASES_PAGE}));
+    return true;
+  }
   if(msg.action==='species-catalog') {
     (async()=>{
       const key='sd-species-catalog';
