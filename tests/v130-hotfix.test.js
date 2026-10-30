@@ -13,7 +13,7 @@ test('Pokédex action row wraps on narrow Complete Dex widths', () => {
   assert.match(css, /#sd-panel \.sd-pokemon-actions>\.sd-pill\{max-width:100%/);
 });
 test('Update panel shows installed version rather than test badge', () => {
-  assert.equal(manifest.version,'1.3.0');
+  assert.equal(manifest.version,'1.4.0');
   assert.doesNotMatch(js, /Versão de teste/);
   assert.match(js, /ahead\?`<span class="sd-pill sd-green">v\$\{E\(INSTALLED_VERSION\)\}<\/span>`/);
 });

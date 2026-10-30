@@ -33,10 +33,18 @@ async function getRelease(force){
 }
 
 chrome.runtime.onMessage.addListener((msg,sender,reply)=>{
-  if(!['base-stats','species-catalog','check-update'].includes(msg?.action))return false;
+  if(!['base-stats','species-catalog','check-update','open-log'].includes(msg?.action))return false;
   let allowed=false;
   try{const u=new URL(sender?.url||'');allowed=u.protocol==='https:'&&u.hostname==='poke.idleworld.online';}catch{}
   if(!allowed){reply({error:'Origem não permitida'});return false;}
+  if(msg.action==='open-log'){
+    const kind=String(msg.kind||'');const id=String(msg.id||'');
+    if(!['daily','manual'].includes(kind)||!new RegExp('^'+kind+'-[0-9]+-[0-9]+(?:-[a-f0-9]{8,24})?$').test(id)){
+      reply({error:'LOG inválido'});return false;
+    }
+    chrome.tabs.create({url:chrome.runtime.getURL('log.html')+'?kind='+encodeURIComponent(kind)+'&id='+encodeURIComponent(id)}).then(()=>reply({ok:true})).catch(error=>reply({error:String(error.message||error)}));
+    return true;
+  }
   if(msg.action==='check-update'){
     getRelease(Boolean(msg.force)).then(reply).catch(e=>reply({error:String(e.message||e).slice(0,140),url:RELEASES_PAGE}));
     return true;

@@ -1,43 +1,63 @@
-# Changelog
+# Histórico de versões
 
-## v1.3.0 — Interface adaptativa e central de atualizações
+## v1.4.0 — Sessões, Community LOG e capturas
 
-### Melhorias
-- Atualizado o subtítulo da marca para **SUA FERRAMENTA POKÉMON** no painel e no popup.
-- Menu de abas adaptável à largura real do painel, com ícones, textos e espaçamentos menores nos modos Smart Dex, Compacto e Complete Dex.
-- Abas distribuídas em uma única linha sem rolagem horizontal, inclusive com o painel redimensionado.
-- Incluído o módulo **Ajustes → Atualizações**, com consulta ao último release oficial de [CommunityDEX](https://github.com/mrooger/CommunityDEX/releases).
-- Verificação manual e automática de novas versões (na abertura do jogo e periodicamente enquanto ele estiver aberto).
-- Aviso de nova versão, com acesso ao release e download do ZIP oficial, se disponível.
-- Documentação de atualização manual para instalações descompactadas, sem executar código remoto.
+### Novo
+- Sessões com fechamento automático a cada 24 horas e reinício dos contadores.
+- **Histórico & Logs** na Visão Geral, recolhido por padrão.
+- **LOG Diário**, com até cinco relatórios dos últimos cinco dias, e **LOG Manual**, com até cinco salvamentos independentes.
+- **Community LOG** em nova aba, com XP da sessão, médias de XP/h e abates/h, totais, Shinies, capturas, loot e exportação JSON.
+- Capturas organizadas em **Todos, Normais e Shiny**, com filtros por raridade e até 200 capturas bem-sucedidas recentes.
 
-### Nota sobre atualizações
-Extensões carregadas pelo modo desenvolvedor não podem substituir automaticamente seus próprios arquivos a partir de um ZIP do GitHub. A verificação é automática; a instalação requer substituir os arquivos na pasta existente e recarregar o Chrome/Edge. A atualização automática de instalação é um recurso da distribuição pelas lojas oficiais.
+### Refinamentos da v1.4.0
+- Indicadores de captura reorganizados: total, capturas/hora, taxa e melhor exemplar da sessão.
+- Identificação de qualidade, IV e Poder com correlação entre eventos, lista de Pokémon e o Log de Capturas do jogo, quando disponíveis.
+- Faixas de raridade ajustadas aos multiplicadores do jogo.
+- Filtros de raridade com seleção múltipla compacta, sem excluir capturas do histórico.
+- Listas extensas com rolagem independente ao expandir.
+- Atividade recente prioriza capturas e encontros Shiny.
 
-## v1.2.1 — Correção de Shinies repetidos
+- Associação de capturas pelo horário com precisão de minuto, sem exigir segundos idênticos.
+- Reconciliação ordenada das capturas repetidas da mesma espécie no Log do jogo.
+- Recuperação de raridade e IV em registros consultados até 24 horas após a captura, quando identificáveis.
 
-- Detecta Shinies somente em pacotes do mapa, evitando mensagens de inventário, equipe, capturas e combate.
-- Impede avisos repetidos para o mesmo encontro durante atualizações do mapa, mesmo que a descrição use outro nome, identificador ou posição.
-- Reutiliza encontros recentes após recarregar a página; evita alertas repetidos no retorno ao jogo.
-- Reagrupa registros históricos muito próximos do mesmo Shiny e mantém registros posteriores separados.
-- Preserva configurações, histórico e compatibilidade com a instalação anterior.
+### Melhorado
+- Contadores acumulados independentes do histórico limitado; suportam mais de 30 mil abates por sessão.
+- Salvamento periódico da sessão, inclusive ao ocultar ou fechar a aba.
+- Atividade recente recolhida por padrão, com até 45 entradas.
+- Composição de XP passa a usar os abates mais recentes, refletindo alterações de bônus sem diluição pela média da sessão.
+- Identificação de raridade e IV das capturas quando enviados pelo jogo.
+- Organização do código e atualização da documentação do projeto.
 
-## v1.2.0 — Community Dex
+### Observações
+- Dados capturados antes desta versão podem ser migrados parcialmente, conforme os registros disponíveis na versão anterior.
+- Os relatórios são locais. Uma cópia em arquivo pode ser obtida no Community LOG pelo botão **Exportar JSON**.
 
-- Corrigido o registro duplicado de encontros Shiny em mensagens numéricas e nominais.
-- Resolução de espécies pelo catálogo do jogo e pela lista pública da PokéAPI.
-- Normalização de registros antigos, mantendo encontros distintos.
-- Preferências independentes para o número de Shinies sobre o ícone e a exibição do botão Smart Dex.
-- Adicionado o modo Complete Dex com cabeçalho recolhível, movimentação e redimensionamento persistentes.
-- Link permanente do Community Hub na barra de status.
-- Layout dos botões de ação da Pokédex ajustado para uma única linha.
+## v1.3.0 — Interface e atualizações
 
-## 1.1.0
+- Título secundário atualizado para **SUA FERRAMENTA POKÉMON**.
+- Menu adaptado a larguras menores, incluindo o modo Complete Dex.
+- Verificação manual e automática de novas versões publicadas no GitHub.
+- Ajustes na disposição dos controles da Pokédex.
 
-- Botão flutuante arrastável, novos ícones e opções de copiar fichas.
-- Histórico da Pokédex, Loot e Shinies com limites de exibição 5/50.
+## v1.2.1 — Estabilidade do detector Shiny
 
-## 1.0.1
+- Proteção contra notificações repetidas para um mesmo encontro.
+- Filtragem de eventos que não representam encontros no mapa.
+- Melhor identificação de mensagens duplicadas e recuperação do histórico.
 
-- Leitura de tooltips mais tolerante ao HTML do jogo.
-- Botão para reiniciar as estatísticas da Visão Geral.
+## v1.2.0 — Smart Dex e Complete Dex
+
+- Introdução do modo **Complete Dex**, com painel móvel e redimensionável.
+- Controles de visibilidade do botão flutuante e do contador de Shinies.
+- Normalização de nomes e IDs de espécies no histórico Shiny.
+- Ajustes na barra de status e nos controles da Pokédex.
+
+## v1.1.0 — Interface e produtividade
+
+- Ícone próprio, botão flutuante arrastável, leitura manual recolhida e histórico expansível.
+- Opções para copiar fichas de Pokémon e modelos de leitura.
+
+## v1.0.0 — Lançamento inicial
+
+- Pokédex, Hunt, capturas, Shinies e painel de configurações.

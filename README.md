@@ -1,79 +1,104 @@
 # Community Dex
 
-**Pokédex, Hunt Tracker, capturas e detector de Shinies para Poké Idle World.** Extensão independente para navegadores Chromium (Chrome e Edge), construída com Manifest V3.
+**Sua ferramenta Pokémon para o Poké Idle World.**
 
-**Versão:** 1.3.0 · [Community Hub](https://stigalzera.com/)
+Community Dex reúne Pokédex, análise de atributos, acompanhamento da Hunt, capturas e encontros Shiny em uma extensão independente para **Google Chrome e Microsoft Edge**, com interface personalizável e armazenamento local.
+
+[**Community Hub**](https://stigalzera.com/) · [**Releases**](https://github.com/mrooger/CommunityDEX/releases) · [**Histórico de versões**](CHANGELOG.md)
 
 ## Instalação
 
-1. Extraia o ZIP e abra a pasta `community-dex-extension`.
-2. No navegador, acesse `chrome://extensions` ou `edge://extensions` e habilite **Modo do desenvolvedor**.
-3. Selecione **Carregar sem compactação** e escolha a pasta com `manifest.json`.
-4. Abra `https://poke.idleworld.online/play`. Use o ícone flutuante ou **Alt + P** para exibir o painel.
+1. Baixe o arquivo ZIP da versão desejada em [Releases](https://github.com/mrooger/CommunityDEX/releases).
+2. Extraia o ZIP para uma pasta permanente.
+3. No Chrome, abra `chrome://extensions` (no Edge, `edge://extensions`).
+4. Ative o **Modo do desenvolvedor** e escolha **Carregar sem compactação**.
+5. Selecione a pasta que contém o arquivo `manifest.json`.
+6. Entre em [Poké Idle World](https://poke.idleworld.online/play). Abra o Community Dex pelo ícone flutuante ou por **Alt + P**.
 
-### Atualização sem perder os dados
+### Atualização
 
-**Importante:** sobrescreva os arquivos **na mesma pasta** usada pela extensão anterior. Depois, em `chrome://extensions`, clique em **Recarregar** na extensão Community Dex e recarregue o jogo. Não remova a extensão para reinstalá-la: uma nova identificação pode resultar em armazenamento separado.
+Mantenha a extensão instalada e **substitua os arquivos dentro da mesma pasta**. Depois clique em **Recarregar** na página de extensões e atualize a aba do jogo. Isso preserva o armazenamento associado à instalação existente.
 
-A correção de Shinies da v1.2.1 continua incluída na v1.3.0: os encontros repetidos são agrupados quando identificáveis, sem redefinir o armazenamento. A chave `community-dex:v1` é mantida para preservar dados e preferências.
+Em **Ajustes → Atualizações**, é possível consultar os lançamentos publicados neste repositório. A instalação por pasta não permite substituição automática do código: a atualização precisa ser aplicada pelo usuário.
 
 ## Recursos
 
-- **Visão geral:** métricas de capturas bem-sucedidas, Shinies, Hunt, atividade e link para o Community Hub; botão de zerar estatísticas.
-- **Pokédex:** leitura de tooltip, imagens, cálculo estimado de IVs, tipos, comparação, cópia de fichas, leitura manual e até 50 fichas no histórico.
-- **Hunt:** abates, XP, composição, calculadora e loot da sessão, com seções expansíveis.
-- **Capturas:** tentativas e sucessos em métricas separadas, histórico expansível e exportação CSV.
-- **Shinies:** identificação pelo catálogo de espécies, controle de duplicações do mesmo encontro, alertas opcionais e histórico expansível (5/50).
-- **Ajustes:** ordem das abas, blocos visíveis, opacidade, tamanho, avisos, botão flutuante, contador de Shinies e verificação de atualizações pelo GitHub.
+### Visão Geral
 
-### Smart Dex e Complete Dex
+- Indicadores de capturas, Shinies, abates e ritmo da Hunt.
+- **Histórico & Logs**, com seções recolhíveis para **LOG Diário (24 horas)** e **LOG Manual**.
+- Arquivamento automático a cada 24 horas de sessão; até cinco logs diários dos últimos cinco dias.
+- Até cinco logs manuais, gerados pelo botão **Salvar LOG**, sem interromper a sessão atual.
+- Visualização dos relatórios em uma nova aba **Community LOG**, com exportação JSON.
+- Histórico recente de até 45 atividades, incluindo capturas e encontros Shiny, recolhido inicialmente.
 
-Escolha o modo em **Ajustes → Estilo da Community Dex**:
+### Community LOG
 
-| Smart Dex | Complete Dex |
+Cada relatório mostra XP acumulada, XP/h e abates/h médios no período, abates totais, encontros Shiny, capturas normais e Shiny, além de histórico recente de encontros, capturas, loot e fontes de XP.
+
+As médias são calculadas sobre o **tempo decorrido do período registrado**, não sobre a taxa instantânea da Hunt. Logs gerados a partir de dados migrados podem apresentar indicação de totais parciais.
+
+### Pokédex
+
+Leitura de fichas pelo mouse, estimativa de IVs, informações de tipos, fraquezas, resistências, imagens, comparação de exemplares, cópia de ficha, análise manual e histórico de até 50 Pokémon. Listas expandidas têm rolagem própria.
+
+### Hunt
+
+Contadores de abates e XP **independentes do tamanho do histórico**. Uma sessão de 24 horas pode ultrapassar 30 mil abates sem congelar a contagem. A memória conserva apenas os eventos recentes necessários ao cálculo de ritmo; os acumulados continuam corretos.
+
+A composição da XP mostra os **bônus atuais em relação à XP base**, calculados a partir dos abates recentes. Alterações de VIP ou Stream aparecem sem depender da média acumulada da sessão; os percentuais exibidos refletem os eventos recebidos, sem presumir bônus não confirmados.
+
+### Capturas
+
+- Capturas totais, média por hora, taxa de sucesso e destaque da melhor captura com dados disponíveis.
+- **Últimas capturas** com abas **Todos / Normais / Shiny** e visualização de até 200 sucessos recentes.
+- Seletor de raridades compacto, com seleção múltipla, incluindo **Fraca, Comum, Incomum, Raro, Épico, Lendário, Mítica, Anciã, Divina** e **Não informada**. Os filtros afetam apenas a visualização, não os registros.
+- Raridade, multiplicador e IV são lidos dos eventos, atualizações da lista de Pokémon e do **Log de Capturas do jogo**. Para sincronizar capturas cujo resultado não incluiu esses atributos, abra **Ver Log de Capturas** dentro do jogo. A extensão compara nomes, horários e a ordem dos registros, inclusive quando a mesma espécie foi capturada repetidamente, sem alterar o Log original. Registros que não podem ser identificados com segurança permanecem sem IV/raridade.
+- Resumo de resultados por Poké Bola e exportação CSV.
+
+### Shinies e personalização
+
+Detector de encontros com redução de duplicidades, histórico, notificações configuráveis e opções de interface. Escolha entre **Smart Dex** e **Complete Dex**, reorganize abas e módulos, arraste/redimensione o painel e configure os avisos.
+
+## Armazenamento e limites
+
+| Informação | Política |
 | --- | --- |
-| Painel independente com ícone flutuante arrastável | Painel amplo com cabeçalho permanente enquanto aberto |
-| Ícone e contador podem ser ocultados individualmente | Conteúdo pode ser recolhido/expandido pelo cabeçalho |
-| Mantém a posição do painel e do ícone | Arraste o cabeçalho para mover; use o canto inferior direito para redimensionar |
+| Sessão automática | 24 horas desde o início da sessão |
+| Abates acumulados | Sem teto artificial de contagem; dimensionado/testado para 30 mil ou mais |
+| Eventos recentes para ritmo | Últimos 1.400 abates em memória |
+| Capturas recentes | 200 capturas bem-sucedidas; totais continuam sendo somados |
+| Shinies visíveis no histórico | Até 200 encontros; total independente |
+| Atividades recentes | 45 eventos |
+| LOGs diários | Até 5, retidos por no máximo 5 dias |
+| LOGs manuais | Até 5, substituição dos mais antigos |
 
-As posições e dimensões são salvas separadamente para cada modo. Mesmo que o ícone flutuante esteja oculto, **Alt + P** continua abrindo o painel.
+Listas extensas de capturas, Shinies, atividades, fichas e loot têm área de rolagem interna quando expandidas. Os relatórios são mantidos no armazenamento local do navegador. Para ter uma cópia externa, abra um **Community LOG** e utilize **Exportar JSON**. O navegador pode limpar dados locais se o perfil ou a extensão forem removidos.
 
-### Atualizações pelo GitHub
+## Estrutura
 
-Em **Ajustes → Atualizações**, a extensão compara sua versão instalada com o release público mais recente de [CommunityDEX](https://github.com/mrooger/CommunityDEX/releases). É possível verificar na hora ou ativar a verificação automática (ao abrir o jogo e a cada seis horas enquanto a página estiver aberta). Os dados de versão são consultados como JSON; nenhum código remoto é executado.
-
-Quando uma versão mais nova estiver disponível, o painel oferece os links oficiais para baixar o ZIP ou abrir a página do release. **Extensões instaladas por “Carregar sem compactação” não podem substituir automaticamente seus próprios arquivos.** Para concluir a atualização, extraia os arquivos na pasta já instalada e clique em **Recarregar** em `chrome://extensions` ou `edge://extensions`. Distribuições futuras pela Chrome Web Store ou Edge Add-ons poderão aproveitar o mecanismo nativo de atualizações da loja.
-
-### Identificação de Shinies
-
-O detector usa os identificadores de espécie e localização presentes nos eventos do jogo, com deduplicação persistente por encontro durante a sessão, inclusive quando chegam atualizações com outros IDs ou coordenadas. Eventos fora do mapa não geram alertas. Procura os nomes no catálogo fornecido pelo jogo e, como alternativa, na lista de espécies da [PokéAPI](https://pokeapi.co/). Para identificadores ainda não reconhecidos, exibe `Pokémon #ID` até conseguir resolver o nome.
-
-A normalização dos registros existentes procura preservar encontros distintos. Registros em uma mesma posição com grande intervalo de tempo são mantidos separadamente.
-
-## Estrutura do projeto
-
-| Arquivo | Responsabilidade |
+| Arquivo | Finalidade |
 | --- | --- |
-| `manifest.json` | Definição Manifest V3, permissões e pontos de entrada |
-| `app.js` / `app.css` | Interface, preferências e histórico |
-| `core.js` | Normalização dos eventos e cálculos |
-| `main-bridge.js` | Leitura passiva de eventos já recebidos pelo jogo |
-| `background.js` | Consulta e cache de dados de espécies e versões oficiais no GitHub |
-| `popup.html`, `popup.js`, `manual.html` | Interface auxiliar e instruções |
+| `manifest.json` | Configuração da extensão Manifest V3 |
+| `app.js`, `app.css` | Interface e integração dos módulos |
+| `core.js` | Leitura e normalização dos eventos do jogo |
+| `session.js` | Estatísticas acumuladas, bônus recentes, fechamento de 24 horas e LOGs |
+| `capture-log.js` | Leitura e associação de metadados do Log de Capturas |
+| `log.html`, `log.css`, `log.js` | Visualizador Community LOG |
+| `main-bridge.js` | Leitura passiva de eventos recebidos na página |
+| `background.js` | Consultas externas, recursos e abertura de relatórios |
 | `tests/` | Testes automatizados |
 
-**Nenhuma dependência externa de build.** Para rodar os testes locais, use Node.js 22 ou superior:
+Para executar os testes, com Node.js instalado:
 
 ```bash
 node --test tests/*.test.js
 ```
 
-## Privacidade e limitações
+## Projeto
 
-O Community Dex guarda preferências e históricos localmente no navegador. Consulta dados públicos da PokéAPI para análise e identificação das espécies. Não envia credenciais, inventário pessoal ou logs de jogo para o Community Hub; também não envia comandos automáticos de combate, compra ou negociação.
+- **Repositório:** https://github.com/mrooger/CommunityDEX
+- **Site da comunidade:** https://stigalzera.com/
+- **Licença:** [MIT](LICENSE)
 
-O funcionamento depende dos eventos que o jogo disponibiliza. As fórmulas de IV/XP são estimativas. Os testes automatizados cobrem os processamentos e a interface simulada, **não substituem testes com uma sessão autenticada nem autorização da equipe do jogo**. Respeite as regras do serviço.
-
-## Licença
-
-MIT — consulte [LICENSE](LICENSE).
+Community Dex é uma ferramenta comunitária independente, sem afiliação oficial ao jogo ou à Pokémon Company. O uso deve respeitar as regras e permissões aplicáveis ao Poké Idle World.

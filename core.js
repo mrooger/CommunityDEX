@@ -249,7 +249,7 @@
       }
       out.push(entry);
     }
-    return out.slice(0,120);
+    return out.slice(0,200);
   }
   // The same spawn can be described by multiple packets, names, coordinates
   // and entity IDs. Keep a live encounter registry instead of a 30s key TTL.
@@ -282,17 +282,57 @@
     }
     return {observe,prime,reset(){sightings=[];},get size(){return sightings.length;}};
   }
-  function captureFrom(packet){const arr=[];for(const item of packetNodes(packet,75)){
-    const type=text(item.type||item.event||item.action||item.kind,50).toLowerCase();
-    if(!/(catch.result|catch_result|capture.result|capture_result)/.test(type))continue;
-    const result=typeof item.success==='boolean'?item.success:typeof item.caught==='boolean'?item.caught:/^(success|caught)$/i.test(String(item.result||item.status||''));
-    arr.push({name:text(item.speciesName||item.pokemonName||item.pokemon||item.species||item.name||'Desconhecido',70),ball:text(item.ballName||item.ball||item.pokeball||'Poké Ball',50),success:result,shiny:item.shiny===true,auto:item.auto===true||item.isAuto===true,t:Date.now()});
-  }return arr;}
+  const pick=(obj,...keys)=>{for(const key of keys)if(obj&&obj[key]!=null)return obj[key];return null;};
+  function captureDetail(item){
+    if(!item||typeof item!=='object')return {};
+    const nested=['capturedPokemon','caughtPokemon','newPokemon','pokemonData','poke','pokemon','capture','result'].map(key=>item[key]).filter(v=>v&&typeof v==='object'&&!Array.isArray(v));
+    const sources=[...nested,item];
+    const first=(...keys)=>{for(const source of sources){const value=pick(source,...keys);if(value!=null)return value;}return null;};
+    const rawQuality=first('qualityMultiplier','multiplicadorQualidade','quality','qualidade','multiplier','mult','q');
+    const qValue=rawQuality&&typeof rawQuality==='object'?pick(rawQuality,'multiplier','value','factor'):rawQuality;
+    const qString=typeof qValue==='string'?qValue.replace(/^[^\d]*/,'').replace(',','.'):qValue;
+    const quality=qString==null?null:Number(qString);
+    const rawIv=first('ivTotal','totalIV','totalIv','iv_sum','ivSum','iv','ivs','individualValues','individuals');
+    let ivTotal=null;
+    if(typeof rawIv==='number'||typeof rawIv==='string'){
+      const match=String(rawIv).match(/^\s*(\d{1,3})(?:\s*\/\s*192)?\s*$/);
+      if(match){const n=Number(match[1]);if(n<=192)ivTotal=n;}
+    }else if(rawIv&&typeof rawIv==='object'){
+      const keys=['hp','atk','def','spa','spd','spe'];const values=keys.map(key=>rawIv[key]);
+      if(values.every(value=>value!=null&&Number.isInteger(Number(value))&&Number(value)>=0&&Number(value)<=32))ivTotal=values.reduce((sum,v)=>sum+Number(v),0);
+      else if(Array.isArray(rawIv)&&rawIv.length===6&&rawIv.every(v=>Number.isInteger(Number(v))&&Number(v)>=0&&Number(v)<=32))ivTotal=rawIv.reduce((sum,v)=>sum+Number(v),0);
+    }
+    const rawRarity=first('rarity','raridade','qualityLabel','qualityName','qualityTier','tier')??(typeof rawQuality==='string'&&!Number.isFinite(Number(rawQuality))?rawQuality:null);
+    const rawPower=first('power','poder');const power=Number(rawPower);
+    const id=first('instanceId','pokemonUid','uid','pokemonInstanceId','uniqueId');
+    return {
+      quality:Number.isFinite(quality)&&quality>0&&quality<=10?quality:null,
+      rarity:typeof rawRarity==='string'&&rawRarity.trim()?text(rawRarity,35):null,
+      ivTotal,ivMax:192,
+      power:rawPower!=null&&Number.isFinite(power)&&power>0?power:null,
+      pokemonId:typeof id==='string'||typeof id==='number'?text(id,90):null
+    };
+  }
+  function captureFrom(packet){
+    const arr=[];
+    for(const item of packetNodes(packet,75)){
+      const type=text(item.type||item.event||item.action||item.kind,50).toLowerCase();
+      if(!/(catch.result|catch_result|capture.result|capture_result)/.test(type))continue;
+      const result=typeof item.success==='boolean'?item.success:typeof item.caught==='boolean'?item.caught:/^(success|caught)$/i.test(String(item.result||item.status||''));
+      const p=['capturedPokemon','caughtPokemon','pokemonData','pokemon','poke'].map(k=>item[k]).find(v=>v&&typeof v==='object'&&!Array.isArray(v))||{};
+      const label=v=>typeof v==='string'||typeof v==='number'?v:'';
+      const name=text(item.speciesName||item.pokemonName||label(item.pokemon)||label(item.species)||item.name||p.speciesName||p.pokemonName||p.name||'Desconhecido',70);
+      arr.push({name,ball:text(item.ballName||item.ball||item.pokeball||'Poké Ball',50),success:result,
+        shiny:item.shiny===true||item.isShiny===true||p.shiny===true||p.isShiny===true,
+        ...captureDetail(item),auto:item.auto===true||item.isAuto===true,t:Date.now()});
+    }
+    return arr;
+  }
   function killFrom(packet){const arr=[];for(const item of packetNodes(packet,80)){
     if(String(item.type||'').toLowerCase()!=='field-kill')continue;
     arr.push({xp:positive(item.xpGained)??0,totalXp:positive(item.totalXp),level:positive(item.level),name:text(item.speciesName||item.pokemonName||'—',70),parts:typeof item.xpParts==='object'&&item.xpParts?Object.fromEntries(Object.entries(item.xpParts).slice(0,12).map(([k,v])=>[text(k,30),positive(v)||0])):{},loot:Array.isArray(item.loot)?item.loot.slice(0,30).map(i=>({name:text(i.name||i.itemName||i.itemId||'Item',50),qty:positive(i.qty??i.quantity)??1})):[],t:Date.now()});
   }return arr;}
   function qualityLabel(q){if(q===null||!Number.isFinite(Number(q)))return 'Indefinida';const v=Number(q);return v<1?'Fraca':v<1.1?'Comum':v<1.3?'Incomum':v<1.5?'Rara':v<1.7?'Épica':v<2?'Lendária':v<3?'Mítica':v<4?'Anciã':'Divina';}
-  scope.CommunityCore={STAT_NAMES,TYPE_PT,num,positive,text,escape,format,short,typeCode,typeMatrix,parseTooltip,formatPokemonSheet,estimateIV,normalizeName,xpForLevel,huntRates,shinyFrom,normalizeShinyHistory,createShinyEncounterTracker,registerSpeciesCatalog,normalizedShinyName,captureFrom,killFrom,qualityLabel};
+  scope.CommunityCore={STAT_NAMES,TYPE_PT,num,positive,text,escape,format,short,typeCode,typeMatrix,parseTooltip,formatPokemonSheet,estimateIV,normalizeName,xpForLevel,huntRates,shinyFrom,normalizeShinyHistory,createShinyEncounterTracker,registerSpeciesCatalog,normalizedShinyName,captureFrom,captureDetail,killFrom,qualityLabel};
   if(typeof module!=='undefined'&&module.exports)module.exports=scope.CommunityCore;
 })(typeof globalThis!=='undefined'?globalThis:this);

@@ -10,16 +10,45 @@
   const NativeWS=window.WebSocket;
   const seen=new WeakSet();let sockets=0,messages=0;
   const tracked=new WeakSet();
+  let knownPokes=null;
   function handle(raw){
     messages++;
     if(messages===1 || messages%20===0)send('heartbeat',{messages,sockets,t:Date.now()});
-    if(typeof raw!=='string'||raw.length>750000)return;
+    if(typeof raw!=='string'||raw.length>1250000)return;
     const packetType=raw.match(/"(?:type|event|kind)"\s*:\s*"([^"\\]{1,65})"/)?.[1]?.toLowerCase()||'';
     const hasShiny=/"(?:shiny|isShiny|shiny_state)"\s*:\s*true\b/.test(raw);
     const trackedType=/^(field-kill|poke-xp|catch-result|catch_result|capture-result|capture_result|analyzer|field)$/.test(packetType);
     const mapType=/^(?:field|map|spawn)(?:[-_](?:state|update|sync|mobs|monsters|entities|snapshot|refresh|enter|spawn|batch))?$/.test(packetType);
     const mapCollection=/"(?:mobs|monsters|entities)"\s*:\s*\[/.test(raw);
     const nonMap=/^(?:inventory|pokes|pokemon|party|character|catch|capture|field-kill|poke-xp|market|shop|battle|combat|attack|analyzer)/.test(packetType);
+    if(packetType==='pokes'){
+      let packet;try{packet=JSON.parse(raw);}catch{return;}
+      const list=Array.isArray(packet.list)?packet.list:Array.isArray(packet.pokes)?packet.pokes:null;
+      if(!list||list.length>20000)return;
+      const next=new Set();const added=[];
+      for(const pokemon of list){
+        if(!pokemon||typeof pokemon!=='object')continue;
+        const id=pokemon.instanceId??pokemon.pokemonUid??pokemon.uid??pokemon.id;
+        if(id==null||typeof id==='object')continue;
+        const key=String(id);if(!key||key.length>90)continue;
+        next.add(key);
+        if(knownPokes&&!knownPokes.has(key)&&added.length<10){
+          const meta={pokemonId:key};
+          const keys=['name','speciesName','pokemonName','speciesId','pokeId','shiny','isShiny','quality','qualidade','qualityMultiplier','multiplier','q','rarity','raridade','qualityName','qualityTier','tier','ivTotal','totalIv','totalIV','iv','ivs','power','poder'];
+          for(const field of keys){const value=pokemon[field];if(value==null)continue;
+            if(typeof value==='string'||typeof value==='number'||typeof value==='boolean')meta[field]=value;
+            else if((field==='ivs'||field==='iv')&&value&&typeof value==='object'){
+              const ivKeys=['hp','atk','def','spa','spd','spe'];
+              if(ivKeys.every(k=>Number.isFinite(Number(value[k]))))meta[field]=Object.fromEntries(ivKeys.map(k=>[k,Number(value[k])]));
+            }
+          }
+          added.push(meta);
+        }
+      }
+      knownPokes=next;
+      if(added.length&&added.length<=5)send('capture-meta',{pokemon:added,t:Date.now()});
+      return;
+    }
     if(!trackedType&&!(hasShiny&&(mapType||(mapCollection&&!nonMap))))return;
     if(packetType==='field'&&!hasShiny)return;
     let parsed;try{parsed=JSON.parse(raw);}catch{return;}
