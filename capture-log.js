@@ -14,37 +14,58 @@
   ];
   const normalize=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'');
   const amount=s=>Number(String(s).replace(',','.'));
-  const textOf=el=>String(el?.innerText||el?.textContent||'').trim();
+  const textOf=el=>String(el?.innerText||el?.textContent||'').replace(/\u00a0/g,' ').trim();
   const isMetadata=m=>m&&(m.rarity!=null||m.quality!=null||m.ivTotal!=null);
   function extract(text,metaText=text){
     const detail=String(metaText??'').replace(/\u00a0/g,' ').slice(0,2000);
     const all=String(text??'').replace(/\u00a0/g,' ').slice(0,3200);
-    const matched=LABELS.find(([,re])=>re.test(detail)||re.test(all));
+    const ascii=value=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const matched=LABELS.find(([,re])=>re.test(ascii(detail))||re.test(ascii(all)));
     const rarity=matched?.[0]||null;
-    const ivRe=/(?:\bIVs?\b\s*[:=\-]?\s*(\d{1,3})(?:\s*\/\s*(192|186))?|\b(\d{1,3})\s*\/\s*192\s*IVs?\b)/i;
+    const ivRe=/(?:\b(?:IVs?|IV[\s_-]*total|total[\s_-]*IVs?)\b\s*[:=\-]?\s*(\d{1,3})(?:\s*\/\s*(192|186))?|\b(\d{1,3})\s*\/\s*(192|186)\s*IVs?\b)/i;
     const ivMatch=detail.match(ivRe)||all.match(ivRe);
     const ivCandidate=ivMatch?Number(ivMatch[1]||ivMatch[3]):null;
     const ivTotal=ivCandidate!==null&&ivCandidate>=0&&ivCandidate<=192?ivCandidate:null;
     const qualityRe=/(?:\b(?:quality|qualidade|multiplicador|raridade)\s*[:=]?\s*|[×x]\s*)([0-9]+[.,][0-9]{1,3})\s*[×x]?/i;
     const qualityMatch=detail.match(qualityRe)||all.match(qualityRe);
     const quality=qualityMatch?amount(qualityMatch[1]):null;
-    return {rarity,quality:quality!=null&&quality>=0.5&&quality<=10?quality:null,ivTotal,ivMax:ivMatch?.[2]?Number(ivMatch[2]):192};
+    return {rarity,quality:quality!=null&&quality>=0.5&&quality<=10?quality:null,ivTotal,ivMax:Number(ivMatch?.[2]||ivMatch?.[4]||192)};
   }
   function attributes(el){
     if(!el)return '';
-    const names=['title','aria-label','data-rarity','data-quality','data-iv','data-ivs','data-iv-total','data-multiplier'];
+    const names=['title','aria-label','data-rarity','data-quality','data-iv','data-ivs','data-iv-total','data-multiplier','data-ivtotal','data-quality-multiplier'];
     const a=names.map(name=>{try{const value=el.getAttribute?.(name);return value?`${name} ${value}`:'';}catch{return '';}}).filter(Boolean);
     if(el.dataset)a.push(...Object.entries(el.dataset).filter(([key])=>/^(?:rarity|quality|iv|ivs|ivTotal|multiplier)$/i.test(key)).map(([key,value])=>`${key} ${value}`));
     return a.join(' ');
   }
   function rowContent(row){
-    const nodes=[row,...Array.from(row.querySelectorAll?.('.clog-meta,.clog-name,.clog-iv,.clog-quality,[title],[data-quality],[data-iv],[data-rarity]')||[]).slice(0,40)];
+    const nodes=[row,...Array.from(row.querySelectorAll?.('.clog-meta,.clog-name,.clog-iv,.clog-quality,.clog-rarity,.clog-tier,[class*=\"clog-meta\"],[class*=\"clog-iv\"],[class*=\"clog-quality\"],[title],[aria-label],[data-quality],[data-iv],[data-iv-total],[data-rarity]')||[]).slice(0,40)];
     return nodes.map(attributes).filter(Boolean).join(' ');
   }
   function parseClock(s){
     const value=String(s||'');
     const match=value.match(/(?:^|\D)([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?(?!\d)/);
     return match?{clock:`${match[1].padStart(2,'0')}:${match[2]}:${match[3]||'00'}`,precision:match[3]?'second':'minute'}:null;
+  }
+  function rowSprite(row){
+    const selectors=['.clog-sprite img','.clog-pokemon img','.clog-poke img','.clog-mon img','.clog-icon img','.clog-name img','img[alt]','img'];
+    for(const selector of selectors){
+      for(const el of Array.from(row.querySelectorAll?.(selector)||[]).slice(0,6)){
+        const url=el.currentSrc||el.getAttribute('src')||'';
+        if(/(?:poke.?ball|item|badge|type|rarity)/i.test(url))continue;
+        const safe=scope.CommunityCore?.safeSprite?.(url);
+        if(safe)return safe;
+      }
+    }
+    for(const selector of ['.clog-sprite','.clog-icon','.clog-pokemon','.clog-poke']){
+      const el=row.querySelector?.(selector);
+      if(!el)continue;
+      const style=el.getAttribute?.('style')||'';
+      const match=style.match(/background(?:-image)?\s*:\s*url\((['"]?)([^)'";]+)\1\)/i);
+      const safe=scope.CommunityCore?.safeSprite?.(match?.[2]);
+      if(safe)return safe;
+    }
+    return null;
   }
   function parseRow(row){
     if(!row||typeof row.querySelector!=='function')return null;
@@ -64,7 +85,7 @@
     const id=row.dataset?.pokemonId||row.dataset?.pokeId||row.dataset?.uid||row.dataset?.instanceId||row.querySelector?.('[data-pokemon-id]')?.dataset?.pokemonId||null;
     const timeEl=row.querySelector('.clog-when,.clog-time,[class*="clog-when"]');
     const time=parseClock(textOf(timeEl)||raw);
-    return {...details,name,pokemonId:id,clock:time?.clock||null,clockPrecision:time?.precision||null};
+    return {...details,name,pokemonId:id,spriteUrl:rowSprite(row),clock:time?.clock||null,clockPrecision:time?.precision||null};
   }
   function minutesApart(clock,time,precision='minute'){
     if(!clock)return Infinity;
@@ -79,7 +100,10 @@
     return dayGap;
   }
   function isValid(c,at){return Boolean(c?.success)&&Number.isFinite(Number(c.t))&&at-c.t>=-3000&&at-c.t<=24*60*60*1000;}
-  function matchesSpecies(row,c){return !normalize(row.name)||normalize(row.name)===normalize(c.name);}
+  function matchesSpecies(row,c){
+    if(row.speciesId&&c.speciesId&&Number(row.speciesId)!==Number(c.speciesId))return false;
+    return !normalize(row.name)||normalize(row.name)===normalize(c.name);
+  }
   function chooseCapture(meta,captures,at=Date.now()){
     if(!meta||!Array.isArray(captures))return null;
     let matches=captures.filter(c=>isValid(c,at)&&matchesSpecies(meta,c));
@@ -122,6 +146,72 @@
     }
     return output;
   }
-  scope.CommunityCaptureLog={extract,parseRow,chooseCapture,reconcileRows};
+  function apiTime(row){
+    for(const key of ['capturedAt','createdAt','timestamp','date','time','when']){
+      const value=row?.[key];
+      if(value==null)continue;
+      if(typeof value==='number'||/^\d{10,13}$/.test(String(value))){
+        const n=Number(value);const ms=n<1e11?n*1000:n;
+        if(Number.isFinite(ms)&&ms>946684800000)return ms;
+      }
+      const parsed=Date.parse(String(value));
+      if(Number.isFinite(parsed))return parsed;
+    }
+    return null;
+  }
+  function apiRecord(row){
+    if(!row||typeof row!=='object')return null;
+    const rawName=[row.speciesName,row.pokemonName,row.name,row.pokemon,row.species]
+      .find(v=>typeof v==='string'&&v.trim()&&!/^\d+$/.test(v.trim()));
+    const speciesId=Number(row.speciesId??row.pokeId??(/^[0-9]+$/.test(String(row.species))?row.species:null));
+    const name=rawName||scope.CommunityCore?.speciesNameById?.(speciesId)||'';
+    const detail=scope.CommunityCore?.captureDetail?.(row)||{};
+    if(detail.quality==null&&detail.ivTotal==null&&detail.rarity==null)return null;
+    const pokemonId=row.pokemonId??row.instanceId??row.pokemonUid??null;
+    return {...row,...detail,name,ivMax:detail.ivMax||192,
+      speciesId:Number.isInteger(speciesId)&&speciesId>0?speciesId:null,
+      pokemonId:pokemonId!=null?String(pokemonId):null,
+      captureTime:apiTime(row)};
+  }
+  function reconcileApiRows(rawRows,captures,at=Date.now()){
+    const rows=Array.isArray(rawRows)?rawRows.slice(0,120).map(apiRecord):[];
+    const records=(captures||[]).filter(c=>isValid(c,at)).sort((a,b)=>b.t-a.t);
+    if(!rows.length||!records.length)return [];
+    const used=new Set(),usedRows=new Set(),output=[];
+    function pair(meta,c){
+      if(!meta||!c||used.has(c)||usedRows.has(meta))return false;
+      used.add(c);usedRows.add(meta);output.push({meta,capture:c});return true;
+    }
+    for(const meta of rows){
+      if(!meta)continue;
+      const choices=records.filter(c=>!used.has(c)&&matchesSpecies(meta,c));
+      if(!choices.length)continue;
+      if(meta.pokemonId){
+        const found=choices.filter(c=>c.pokemonId!=null&&String(c.pokemonId)===meta.pokemonId);
+        if(found.length===1){pair(meta,found[0]);continue;}
+      }
+      if(meta.captureTime!=null){
+        const nearby=choices.map(c=>({c,diff:Math.abs(c.t-meta.captureTime)})).filter(x=>x.diff<=150000).sort((a,b)=>a.diff-b.diff);
+        if(nearby.length&&(nearby.length===1||nearby[1].diff-nearby[0].diff>2500))pair(meta,nearby[0].c);
+      }
+    }
+    // When the API only supplies ordered rows, synchronize the newest prefix
+    // once it is anchored to a fresh capture. Never pair across a mismatch.
+    if(rows[0]&&records[0]&&at-records[0].t<=5*60000&&matchesSpecies(rows[0],records[0])){
+      const n=Math.min(rows.length,records.length);
+      for(let i=0;i<n;i++){
+        if(!rows[i]||!matchesSpecies(rows[i],records[i]))break;
+        if(rows[i].captureTime!=null){
+          if(Math.abs(rows[i].captureTime-records[i].t)>150000)break;
+          if(usedRows.has(rows[i]))continue;
+          continue;
+        }
+        if(usedRows.has(rows[i]))break;
+        pair(rows[i],records[i]);
+      }
+    }
+    return output;
+  }
+  scope.CommunityCaptureLog={extract,parseRow,chooseCapture,reconcileRows,apiRecord,reconcileApiRows};
   if(typeof module!=='undefined'&&module.exports)module.exports=scope.CommunityCaptureLog;
 })(typeof globalThis!=='undefined'?globalThis:this);

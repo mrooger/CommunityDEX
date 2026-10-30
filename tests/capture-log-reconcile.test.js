@@ -63,3 +63,24 @@ test('captura antiga acima de 10 minutos pode ser enriquecida até 24 horas',()=
   assert.equal(L.chooseCapture({name:'Totodile'},[c],at),c);
   assert.equal(L.chooseCapture({name:'Totodile'},[{...c,t:at-25*3600000}],at),null);
 });
+
+test('metadata pending may be enriched once game confirms quality and IV',()=>{
+  const now=Date.now();
+  const capture={name:'Totodile',success:true,t:now-2500,rarity:null,quality:null,ivTotal:null};
+  const pending=row('Totodile','Pendente');
+  assert.equal(L.parseRow(pending),null);
+  const confirmed=row('Totodile','Épica ×1,565 · IV Total 142/192');
+  const links=L.reconcileRows([confirmed],[capture],now);
+  assert.equal(links.length,1);
+  assert.equal(links[0].meta.rarity,'Épico');
+  assert.equal(links[0].meta.quality,1.565);
+  assert.equal(links[0].meta.ivTotal,142);
+});
+test('capture log can read quality and IV attributes even without detailed text',()=>{
+  const r=row('Growlithe','');
+  r.querySelectorAll=()=>[{getAttribute:(k)=>({'data-rarity':'Lendária','data-quality':'1.800','data-iv-total':'160'}[k]||null),dataset:{}}];
+  const info=L.parseRow(r);
+  assert.equal(info.rarity,'Lendário');
+  assert.equal(info.quality,1.8);
+  assert.equal(info.ivTotal,160);
+});

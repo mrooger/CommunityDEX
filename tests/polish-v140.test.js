@@ -16,7 +16,7 @@ test('lê raridade, multiplicador e IV exibidos no Log de Capturas do jogo',()=>
       if(selector.includes('clog-name'))return {textContent:'Totodile'};
     },dataset:{}
   };
-  assert.deepEqual(L.parseRow(row),{rarity:'Lendário',quality:1.8,ivTotal:140,ivMax:192,name:'Totodile',pokemonId:null,clock:null,clockPrecision:null});
+  assert.deepEqual(L.parseRow(row),{rarity:'Lendário',quality:1.8,ivTotal:140,ivMax:192,name:'Totodile',pokemonId:null,spriteUrl:null,clock:null,clockPrecision:null});
   assert.deepEqual(L.extract('Swellow\nRara · IV 88','Rara · IV 88'),{rarity:'Raro',quality:null,ivTotal:88,ivMax:192});
   assert.equal(L.extract('Pokémon sem metadados').ivTotal,null);
 });
@@ -58,8 +58,47 @@ test('v1.4.0 preservada, fontes de captura e bônus recentes registradas',()=>{
   assert.equal(manifest.version,'1.4.0');
   assert(manifest.content_scripts.some(c=>c.js?.includes('capture-log.js')));
   const app=fs.readFileSync(path.join(here,'app.js'),'utf8');
-  assert(app.includes('.clog-window .clog-list .clog-row'));
+  assert(app.includes('.clog-window .clog-row'));
   assert(app.includes('M.currentBonuses(state.kills,now())'));
   assert(app.includes('Versão v1.4.0'));
   assert(C.captureDetail({ivTotal:140,quality:1.8}).ivTotal===140);
+});
+
+test('identifica Épica com acento inicial e normaliza para Épico',()=>{
+  for(const name of ['Épica','ÉPICA','Epica','Épico','Epic']){
+    const data=L.extract('Totodile · '+name+' · IV 138/192');
+    assert.equal(data.rarity,'Épico',name);
+    assert.equal(M.rarity(data.rarity,data.quality),'Épico');
+  }
+  assert.equal(M.rarity('Épica',null),'Épico');
+});
+
+test('ordena capturas por maior IV, maior raridade ou mais recente, sem perder registros',()=>{
+  const captures=[
+    {name:'A',t:1,rarity:'Épica',ivTotal:145},
+    {name:'B',t:3,rarity:'Comum',ivTotal:100},
+    {name:'C',t:2,rarity:'Lendária',ivTotal:135},
+    {name:'D',t:4,rarity:null,ivTotal:null}
+  ];
+  const source=captures.map(x=>x.name).join();
+  assert.deepEqual(M.sortCaptures(captures,'iv').map(x=>x.name),['A','C','B','D']);
+  assert.deepEqual(M.sortCaptures(captures,'rarity').map(x=>x.name),['C','A','B','D']);
+  assert.deepEqual(M.sortCaptures(captures,'recent').map(x=>x.name),['D','B','C','A']);
+  assert.equal(captures.map(x=>x.name).join(),source);
+  assert.deepEqual(M.filterCaptures(captures,'all',['Épico']).map(x=>x.name),['A']);
+});
+
+test('painéis recolhíveis e histórico preservam configuração da v1.4.0',()=>{
+  const app=fs.readFileSync(path.join(here,'app.js'),'utf8');
+  for(const key of ['pokemonTypes','capturesBalls','shinyDetector']){
+    assert(app.includes(key+':false'));
+    assert(app.includes("expandable('"+key+"'"));
+  }
+  for(const key of ['activity','pokemon-history','loot','shinies','captures']){
+    assert(app.includes('data-scroll-id="'+key+'"')||(key==='captures'&&app.includes('const scrollId=stream?')));
+  }
+  assert(app.includes('listPositions.get(el.dataset.scrollId)'));
+  assert(app.includes('data-capture-kind'));
+  assert(app.includes('data-capture-sort'));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(here,'manifest.json'))).version,'1.4.0');
 });

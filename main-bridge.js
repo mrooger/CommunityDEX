@@ -11,6 +11,62 @@
   const seen=new WeakSet();let sockets=0,messages=0;
   const tracked=new WeakSet();
   let knownPokes=null;
+  let lastLogRequest=0,logRequestPending=false;
+  function readAccessToken(){
+    try{
+      const data=JSON.parse(sessionStorage.getItem('pokeweb:tokens')||'null');
+      return typeof data?.accessToken==='string'?data.accessToken:null;
+    }catch{return null;}
+  }
+  async function requestCaptureLog(){
+    if(logRequestPending||Date.now()-lastLogRequest<4500)return;
+    const token=readAccessToken();
+    if(!token)return;
+    logRequestPending=true;
+    lastLogRequest=Date.now();
+    try{
+      const response=await fetch('/api/game/capture-log?filter=all',{
+        method:'GET',headers:{Authorization:`Bearer ${token}`},credentials:'same-origin',cache:'no-store'
+      });
+      if(!response.ok)return;
+      const payload=await response.json();
+      const rows=Array.isArray(payload?.rows)?payload.rows:Array.isArray(payload?.data?.rows)?payload.data.rows:[];
+      const fields=['id','captureId','pokemonId','instanceId','pokemonUid','speciesId','pokeId','species','speciesName','pokemonName','name','quality','qualidade','multiplier','qualityMultiplier','rarity','raridade','tier','ivTotal','totalIv','totalIV','iv','ivs','growth','shiny','isShiny','ball','ballName','ballId','capturedAt','createdAt','timestamp','time','date','when','spriteUrl','imageUrl','iconUrl'];
+      const safe=[];
+      for(const row of rows.slice(0,120)){
+        if(!row||typeof row!=='object')continue;
+        const record={};
+        for(const key of fields){
+          const value=row[key];
+          if(['string','number','boolean'].includes(typeof value)&&String(value).length<=240)record[key]=value;
+          else if(['iv','ivs','growth'].includes(key)&&Array.isArray(value)&&value.length===6&&value.every(n=>Number.isInteger(Number(n))&&n>=0&&n<=32))record[key]=value;
+        }
+        if(Object.keys(record).length)safe.push(record);
+      }
+      if(safe.length)send('capture-log-data',{rows:safe,t:Date.now()});
+    }catch{}finally{logRequestPending=false;}
+  }
+  window.addEventListener?.('message',event=>{
+    if(event.source!==window||event.origin!==location.origin)return;
+    if(event.data?.channel===CH&&event.data.type==='capture-log-request')requestCaptureLog();
+  });
+  function captureMetadata(pokemon,key){
+    const meta={pokemonId:key};
+    const fields=['name','speciesName','pokemonName','speciesId','species','pokeId','shiny','isShiny','quality','qualidade','qualityMultiplier','multiplier','q','rarity','raridade','qualityName','qualityTier','tier','ivTotal','totalIv','totalIV','iv','ivs','power','poder','spriteUrl','pokemonSprite','iconUrl','imageUrl','sprite','image','icon'];
+    for(const field of fields){
+      const value=pokemon[field];
+      if(value==null)continue;
+      if(['string','number','boolean'].includes(typeof value))meta[field]=value;
+      else if((field==='ivs'||field==='iv')&&typeof value==='object'){
+        const ivKeys=['hp','atk','def','spa','spd','spe'];
+        if(ivKeys.every(k=>Number.isFinite(Number(value[k]))))meta[field]=Object.fromEntries(ivKeys.map(k=>[k,Number(value[k])]));
+      }
+    }
+    return meta;
+  }
+  function metadataSignature(meta){
+    return JSON.stringify([meta.quality,meta.qualidade,meta.qualityMultiplier,meta.multiplier,meta.q,meta.rarity,meta.raridade,meta.qualityName,meta.qualityTier,meta.tier,meta.ivTotal,meta.totalIv,meta.totalIV,meta.iv,meta.ivs]);
+  }
   function handle(raw){
     messages++;
     if(messages===1 || messages%20===0)send('heartbeat',{messages,sockets,t:Date.now()});
@@ -25,28 +81,25 @@
       let packet;try{packet=JSON.parse(raw);}catch{return;}
       const list=Array.isArray(packet.list)?packet.list:Array.isArray(packet.pokes)?packet.pokes:null;
       if(!list||list.length>20000)return;
-      const next=new Set();const added=[];
+      const initial=knownPokes===null;
+      if(initial)knownPokes=new Map();
+      const added=[];
       for(const pokemon of list){
         if(!pokemon||typeof pokemon!=='object')continue;
         const id=pokemon.instanceId??pokemon.pokemonUid??pokemon.uid??pokemon.id;
         if(id==null||typeof id==='object')continue;
         const key=String(id);if(!key||key.length>90)continue;
-        next.add(key);
-        if(knownPokes&&!knownPokes.has(key)&&added.length<10){
-          const meta={pokemonId:key};
-          const keys=['name','speciesName','pokemonName','speciesId','pokeId','shiny','isShiny','quality','qualidade','qualityMultiplier','multiplier','q','rarity','raridade','qualityName','qualityTier','tier','ivTotal','totalIv','totalIV','iv','ivs','power','poder'];
-          for(const field of keys){const value=pokemon[field];if(value==null)continue;
-            if(typeof value==='string'||typeof value==='number'||typeof value==='boolean')meta[field]=value;
-            else if((field==='ivs'||field==='iv')&&value&&typeof value==='object'){
-              const ivKeys=['hp','atk','def','spa','spd','spe'];
-              if(ivKeys.every(k=>Number.isFinite(Number(value[k]))))meta[field]=Object.fromEntries(ivKeys.map(k=>[k,Number(value[k])]));
-            }
-          }
-          added.push(meta);
+        const meta=captureMetadata(pokemon,key);
+        const signature=metadataSignature(meta);
+        const previous=knownPokes.get(key);
+        if(!initial&&(previous===undefined||previous!==signature)&&added.length<12){
+          const hasDetails=['quality','qualidade','qualityMultiplier','multiplier','q','rarity','raridade','qualityName','qualityTier','tier','ivTotal','totalIv','totalIV','iv','ivs'].some(k=>meta[k]!=null);
+          if(hasDetails)added.push(meta);
         }
+        knownPokes.set(key,signature);
       }
-      knownPokes=next;
-      if(added.length&&added.length<=5)send('capture-meta',{pokemon:added,t:Date.now()});
+      if(knownPokes.size>30000)knownPokes=null;
+      if(added.length)send('capture-meta',{pokemon:added,t:Date.now()});
       return;
     }
     if(!trackedType&&!(hasShiny&&(mapType||(mapCollection&&!nonMap))))return;

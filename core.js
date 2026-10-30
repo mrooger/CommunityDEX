@@ -134,6 +134,95 @@
   function packetNodes(input,max=100){const queue=[input],visited=new WeakSet(),out=[];while(queue.length&&out.length<max){const item=queue.shift();if(!item||typeof item!=='object'||visited.has(item))continue;visited.add(item);out.push(item);for(const k of ['payload','data','detail','result','event','mobs','entities','monsters','pokemons','list','events']){const v=item[k];if(Array.isArray(v)) queue.push(...v.slice(0,120));else if(v&&typeof v==='object')queue.push(v);}if(Array.isArray(item))queue.push(...item.slice(0,120));}return out;}
   const speciesById=new Map([[277,'Swellow'],[306,'Aggron'],[158,'Totodile'],[157,'Typhlosion'],[228,'Houndour']]);
   const idBySpecies=new Map([...speciesById].map(([id,name])=>[name.toLowerCase(),id]));
+  const speciesImages=new Map();
+  function safeSprite(value){
+    if(typeof value!=='string'||!value.trim()||value.length>700)return null;
+    try{
+      const u=new URL(value,typeof location!=='undefined'?location.origin:'https://poke.idleworld.online');
+      if(u.protocol!=='https:'&&!((u.protocol==='http:')&&u.hostname==='localhost'))return null;
+      if(u.username||u.password)return null;
+      return u.href;
+    }catch{return null;}
+  }
+  const outlandBase=Object.freeze({
+    "ancient alakazam":65,
+    "furious ampharos":181,
+    "wardog arcanine":59,
+    "brave blastoise":9,
+    "brave charizard":6,
+    "moon clefable":36,
+    "evil cloyster":91,
+    "dark crobat":169,
+    "freezing dewgong":87,
+    "roll donphan":232,
+    "ancient dragonair":148,
+    "magnetic electabuzz":125,
+    "tribal feraligatr":160,
+    "trickmaster gengar":94,
+    "enigmatic girafarig":203,
+    "hard golem":76,
+    "war granbull":210,
+    "war gyarados":130,
+    "war heracross":214,
+    "boxer hitmonchan":107,
+    "taekwondo hitmonlee":106,
+    "capoeira hitmontop":237,
+    "hypno":97,
+    "psy jynx":124,
+    "lava magmar":126,
+    "furious mantine":226,
+    "bone marowak":105,
+    "ancient meganium":154,
+    "milch-miltank":241,
+    "banshee misdreavus":200,
+    "furious murkrow":198,
+    "brave nidoking":34,
+    "brave nidoqueen":31,
+    "brave noctowl":164,
+    "parasect":47,
+    "aviator pidgeot":18,
+    "heavy piloswine":221,
+    "war pinsir":127,
+    "ancient pupitar":247,
+    "charged raichu":26,
+    "brute rhydon":112,
+    "furious sandslash":28,
+    "furious scyther":123,
+    "metal skarmory":227,
+    "iron steelix":208,
+    "enraged typhlosion":157,
+    "brave venusaur":3,
+    "singer wigglytuff":40,
+    "tribal xatu":178,
+    "ancient dragonite":149,
+    "ancient kingdra":230,
+    "undefeated machamp":68,
+    "octopus octillery":224,
+    "furious scizor":212,
+    "brute snorlax":143,
+    "elder tangela":114,
+    "elder tentacruel":73,
+    "brute tyranitar":248,
+    "brute ursaring":217,
+    "elder muk":89
+  });
+  function baseSprite(name,shiny=false){
+    const key=String(name||'').trim().toLowerCase();
+    const id=outlandBase[key]||idBySpecies.get(key);
+    return Number.isInteger(id)&&id>=1&&id<=1025
+      ?`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${shiny?'shiny/':''}${id}.png`:null;
+  }
+  function speciesSprite(name,shiny=false,direct=null,speciesId=null){
+    const key=String(name||'').trim().toLowerCase();
+    if(outlandBase[key])return baseSprite(name,shiny);
+    const fromRecord=safeSprite(direct);
+    if(fromRecord)return fromRecord;
+    const listed=speciesImages.get(key);
+    if(listed){const image=safeSprite(shiny&&listed.shiny?listed.shiny:listed.normal);if(image)return image;}
+    const number=Number(speciesId)||idBySpecies.get(key);
+    if(!Number.isInteger(number)||number<1||number>1025)return null;
+    return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${shiny?'shiny/':''}${number}.png`;
+  }
   function registerSpeciesCatalog(creatures){
     const list=Array.isArray(creatures)?creatures:Array.isArray(creatures?.creatures)?creatures.creatures:[];
     for(const entry of list){
@@ -142,6 +231,9 @@
       const name=text(entry.name||entry.speciesName||entry.pokemonName||entry.displayName||'',70).trim();
       if(Number.isInteger(id)&&id>0&&id<50000&&name&&!/^\d+$/.test(name)){
         speciesById.set(id,name);idBySpecies.set(name.toLowerCase(),id);
+        const normal=entry.spriteUrl||entry.sprite||entry.imageUrl||entry.image||entry.iconUrl||entry.icon||null;
+        const shiny=entry.shinySpriteUrl||entry.spriteShiny||entry.shinySprite||null;
+        if(safeSprite(normal))speciesImages.set(name.toLowerCase(),{normal,shiny});
       }
     }
     return speciesById.size;
@@ -292,7 +384,7 @@
     const qValue=rawQuality&&typeof rawQuality==='object'?pick(rawQuality,'multiplier','value','factor'):rawQuality;
     const qString=typeof qValue==='string'?qValue.replace(/^[^\d]*/,'').replace(',','.'):qValue;
     const quality=qString==null?null:Number(qString);
-    const rawIv=first('ivTotal','totalIV','totalIv','iv_sum','ivSum','iv','ivs','individualValues','individuals');
+    const rawIv=first('ivTotal','totalIV','totalIv','iv_sum','ivSum','iv','ivs','growth','individualValues','individuals');
     let ivTotal=null;
     if(typeof rawIv==='number'||typeof rawIv==='string'){
       const match=String(rawIv).match(/^\s*(\d{1,3})(?:\s*\/\s*192)?\s*$/);
@@ -305,12 +397,15 @@
     const rawRarity=first('rarity','raridade','qualityLabel','qualityName','qualityTier','tier')??(typeof rawQuality==='string'&&!Number.isFinite(Number(rawQuality))?rawQuality:null);
     const rawPower=first('power','poder');const power=Number(rawPower);
     const id=first('instanceId','pokemonUid','uid','pokemonInstanceId','uniqueId');
+    const spriteUrl=safeSprite(first('spriteUrl','pokemonSprite','iconUrl','imageUrl','sprite','image','icon'));
+    const speciesId=first('speciesId','species','pokeId','dexId');
     return {
       quality:Number.isFinite(quality)&&quality>0&&quality<=10?quality:null,
       rarity:typeof rawRarity==='string'&&rawRarity.trim()?text(rawRarity,35):null,
       ivTotal,ivMax:192,
       power:rawPower!=null&&Number.isFinite(power)&&power>0?power:null,
-      pokemonId:typeof id==='string'||typeof id==='number'?text(id,90):null
+      pokemonId:typeof id==='string'||typeof id==='number'?text(id,90):null,
+      speciesId:Number.isInteger(Number(speciesId))&&Number(speciesId)>0?Number(speciesId):null,spriteUrl
     };
   }
   function captureFrom(packet){
@@ -333,6 +428,6 @@
     arr.push({xp:positive(item.xpGained)??0,totalXp:positive(item.totalXp),level:positive(item.level),name:text(item.speciesName||item.pokemonName||'—',70),parts:typeof item.xpParts==='object'&&item.xpParts?Object.fromEntries(Object.entries(item.xpParts).slice(0,12).map(([k,v])=>[text(k,30),positive(v)||0])):{},loot:Array.isArray(item.loot)?item.loot.slice(0,30).map(i=>({name:text(i.name||i.itemName||i.itemId||'Item',50),qty:positive(i.qty??i.quantity)??1})):[],t:Date.now()});
   }return arr;}
   function qualityLabel(q){if(q===null||!Number.isFinite(Number(q)))return 'Indefinida';const v=Number(q);return v<1?'Fraca':v<1.1?'Comum':v<1.3?'Incomum':v<1.5?'Rara':v<1.7?'Épica':v<2?'Lendária':v<3?'Mítica':v<4?'Anciã':'Divina';}
-  scope.CommunityCore={STAT_NAMES,TYPE_PT,num,positive,text,escape,format,short,typeCode,typeMatrix,parseTooltip,formatPokemonSheet,estimateIV,normalizeName,xpForLevel,huntRates,shinyFrom,normalizeShinyHistory,createShinyEncounterTracker,registerSpeciesCatalog,normalizedShinyName,captureFrom,captureDetail,killFrom,qualityLabel};
+  scope.CommunityCore={STAT_NAMES,TYPE_PT,num,positive,text,escape,format,short,typeCode,typeMatrix,parseTooltip,formatPokemonSheet,estimateIV,normalizeName,speciesSprite,baseSprite,safeSprite,xpForLevel,huntRates,shinyFrom,normalizeShinyHistory,createShinyEncounterTracker,registerSpeciesCatalog,normalizedShinyName,captureFrom,captureDetail,killFrom,qualityLabel,speciesNameById:id=>speciesById.get(Number(id))||null};
   if(typeof module!=='undefined'&&module.exports)module.exports=scope.CommunityCore;
 })(typeof globalThis!=='undefined'?globalThis:this);

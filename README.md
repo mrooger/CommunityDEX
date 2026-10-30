@@ -54,7 +54,12 @@ A composição da XP mostra os **bônus atuais em relação à XP base**, calcul
 - **Últimas capturas** com abas **Todos / Normais / Shiny** e visualização de até 200 sucessos recentes.
 - Seletor de raridades compacto, com seleção múltipla, incluindo **Fraca, Comum, Incomum, Raro, Épico, Lendário, Mítica, Anciã, Divina** e **Não informada**. Os filtros afetam apenas a visualização, não os registros.
 - Raridade, multiplicador e IV são lidos dos eventos, atualizações da lista de Pokémon e do **Log de Capturas do jogo**. Para sincronizar capturas cujo resultado não incluiu esses atributos, abra **Ver Log de Capturas** dentro do jogo. A extensão compara nomes, horários e a ordem dos registros, inclusive quando a mesma espécie foi capturada repetidamente, sem alterar o Log original. Registros que não podem ser identificados com segurança permanecem sem IV/raridade.
+- Ícones dos Pokémon capturados, obtidos do jogo quando disponíveis, com sprite de referência como alternativa.
 - Resumo de resultados por Poké Bola e exportação CSV.
+
+### Stream Geral
+
+Aba opcional, desativada inicialmente e ativada em **Ajustes → Organizar abas**. Reúne nove indicadores compactos da sessão e o histórico de capturas com filtros recolhidos por padrão. Pode ser reorganizada como qualquer outra aba.
 
 ### Shinies e personalização
 

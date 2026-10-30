@@ -17,6 +17,19 @@
     }
     return null;
   };
+  function sortCaptures(captures,order='recent'){
+    const list=[...(Array.isArray(captures)?captures:[])];
+    const newest=(a,b)=>(Number(b.t)||0)-(Number(a.t)||0);
+    if(order==='iv')return list.sort((a,b)=>{
+      const av=a.ivTotal==null?-1:Number(a.ivTotal),bv=b.ivTotal==null?-1:Number(b.ivTotal);
+      return (Number.isFinite(bv)?bv:-1)-(Number.isFinite(av)?av:-1)||newest(a,b);
+    });
+    if(order==='rarity')return list.sort((a,b)=>{
+      const ar=RARITIES.indexOf(rarity(a.rarity,a.quality)),br=RARITIES.indexOf(rarity(b.rarity,b.quality));
+      return br-ar||newest(a,b);
+    });
+    return list.sort(newest);
+  }
   function filterCaptures(history,tab='all',selected=RARITIES){
     const allowed=new Set(Array.isArray(selected)?selected:RARITIES);
     return (Array.isArray(history)?history:[]).filter(c=>(tab==='all'||(tab==='shiny'?c.shiny===true:c.shiny!==true))&&allowed.has(rarity(c.rarity,c.quality)||'Não informada'));
@@ -47,7 +60,7 @@
   function enrichCapture(s,c){
     const target=(s.recentCaptures||[]).find(x=>x.t===c.t&&x.name===c.name);
     if(!target)return false;
-    for(const key of ['quality','ivTotal','ivMax','rarity','power','pokemonId'])if(c[key]!=null)target[key]=c[key];
+    for(const key of ['quality','ivTotal','ivMax','rarity','power','pokemonId','speciesId','spriteUrl'])if(c[key]!=null)target[key]=c[key];
     target.rarity=rarity(target.rarity,target.quality);
     if(s.bestCapture?.t===target.t&&s.bestCapture?.name===target.name)s.bestCapture={...target};
     refreshBest(s);return true;
@@ -102,6 +115,6 @@
     for(const e of [...(shinies||[])].reverse())addShiny(s,e);
     return s;
   }
-  scope.CommunitySession={DAY,RARITIES,fresh,rarity,filterCaptures,addKill,addCapture,enrichCapture,refreshBest,addShiny,snapshot,rotate,prune,bonuses,currentBonuses,fromLegacy};
+  scope.CommunitySession={DAY,RARITIES,fresh,rarity,filterCaptures,sortCaptures,addKill,addCapture,enrichCapture,refreshBest,addShiny,snapshot,rotate,prune,bonuses,currentBonuses,fromLegacy};
   if(typeof module!=='undefined'&&module.exports)module.exports=scope.CommunitySession;
 })(typeof globalThis!=='undefined'?globalThis:this);
