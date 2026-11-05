@@ -451,3 +451,19 @@
 #sd-panel .sd-stream-history .sd-list-area .sd-event{min-height:39px;padding:6px 7px}
 #sd-panel .sd-stream-history .sd-list-area .sd-event>time{font-size:8px}
 @container sd-panel (max-width:350px){#sd-panel .sd-stream-metrics{gap:6px}#sd-panel .sd-stream-metrics .sd-metric{padding:9px 9px 8px;min-height:77px}#sd-panel .sd-stream-metrics .sd-metric-name{font-size:10.5px}#sd-panel .sd-stream-metrics .sd-metric strong{font-size:23px}#sd-panel .sd-stream-metrics .sd-metric small{font-size:8.5px}}
+
+/* Pokémon: streamlined manual entry */
+#sd-panel .sd-simple-intro{font-size:11px;line-height:1.55;color:#aebdd1;margin:2px 0 12px}
+#sd-panel .sd-simple-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0}
+#sd-panel .sd-simple-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+#sd-panel .sd-simple-field>span{font-size:10px;font-weight:750;color:#aebdd1}
+#sd-panel .sd-simple-field>span b{color:#ffb57d}
+#sd-panel .sd-simple-wide,#sd-panel .sd-simple-label,#sd-panel .sd-simple-stats{grid-column:1/-1}
+#sd-panel .sd-simple-label{font-size:11px;font-weight:850;color:#f2d5b4;margin-top:6px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+#sd-panel .sd-simple-label small{font-size:9px;font-weight:500;color:#8ca0bd}
+#sd-panel .sd-simple-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+#sd-panel .sd-simple-field input,#sd-panel .sd-simple-field select{margin:0;min-height:38px;min-width:0;width:100%;border:1px solid #ffffff29;background:#101b2c;color:#e9f1ff;padding:8px 10px;border-radius:9px;font-size:12px;font-family:inherit;outline:0}
+#sd-panel .sd-simple-field input:focus,#sd-panel .sd-simple-field select:focus{border-color:#f4ae77;box-shadow:0 0 0 2px #f4ae7720}
+#sd-panel .sd-simple-field input::placeholder{color:#667992}
+#sd-panel .sd-simple-field select{cursor:pointer}
+@container sd-panel (max-width:350px){#sd-panel .sd-simple-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}

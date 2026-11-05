@@ -53,14 +53,14 @@ test('Stream passa de 15% a 20% sem ficar presa à média acumulada de toda a se
   assert.equal(M.currentBonuses([{t:at,parts:{base:1000,stream:175}}],at)[0].rate,17.5);
   assert.deepEqual(M.currentBonuses([],at),[]);
 });
-test('v1.4.0 preservada, fontes de captura e bônus recentes registradas',()=>{
+test('fluxo preservado na v1.5.0, fontes de captura e bônus recentes registradas',()=>{
   const manifest=JSON.parse(fs.readFileSync(path.join(here,'manifest.json'),'utf8'));
-  assert.equal(manifest.version,'1.4.0');
+  assert.equal(manifest.version,'1.5.0');
   assert(manifest.content_scripts.some(c=>c.js?.includes('capture-log.js')));
   const app=fs.readFileSync(path.join(here,'app.js'),'utf8');
   assert(app.includes('.clog-window .clog-row'));
   assert(app.includes('M.currentBonuses(state.kills,now())'));
-  assert(app.includes('Versão v1.4.0'));
+  assert(app.includes('Versão v1.5.0'));
   assert(C.captureDetail({ivTotal:140,quality:1.8}).ivTotal===140);
 });
 
@@ -88,7 +88,7 @@ test('ordena capturas por maior IV, maior raridade ou mais recente, sem perder r
   assert.deepEqual(M.filterCaptures(captures,'all',['Épico']).map(x=>x.name),['A']);
 });
 
-test('painéis recolhíveis e histórico preservam configuração da v1.4.0',()=>{
+test('painéis recolhíveis e histórico preservam configuração na v1.5.0',()=>{
   const app=fs.readFileSync(path.join(here,'app.js'),'utf8');
   for(const key of ['pokemonTypes','capturesBalls','shinyDetector']){
     assert(app.includes(key+':false'));
@@ -100,5 +100,5 @@ test('painéis recolhíveis e histórico preservam configuração da v1.4.0',()=
   assert(app.includes('listPositions.get(el.dataset.scrollId)'));
   assert(app.includes('data-capture-kind'));
   assert(app.includes('data-capture-sort'));
-  assert.equal(JSON.parse(fs.readFileSync(path.join(here,'manifest.json'))).version,'1.4.0');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(here,'manifest.json'))).version,'1.5.0');
 });

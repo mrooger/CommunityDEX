@@ -40,7 +40,7 @@ As médias são calculadas sobre o **tempo decorrido do período registrado**, n
 
 ### Pokédex
 
-Leitura de fichas pelo mouse, estimativa de IVs, informações de tipos, fraquezas, resistências, imagens, comparação de exemplares, cópia de ficha, análise manual e histórico de até 50 Pokémon. Listas expandidas têm rolagem própria.
+Leitura de fichas pelo mouse **na mochila e no Mercado Global** (ao selecionar Pokémon em linhas ou cards, a extensão analisa a barra lateral de detalhes), estimativa de IVs, informações de tipos, fraquezas, resistências, imagens, comparação de exemplares, cópia de ficha, leitura manual e **Leitura Simplificada** com formulário individual para nome, nível, qualidade, tipos, seis atributos, IV e poder. Ambos os modos manuais ficam recolhidos inicialmente. Histórico de até 50 Pokémon. Listas expandidas têm rolagem própria.
 
 ### Hunt
 
@@ -59,7 +59,7 @@ A composição da XP mostra os **bônus atuais em relação à XP base**, calcul
 
 ### Stream Geral
 
-Aba opcional, desativada inicialmente e ativada em **Ajustes → Organizar abas**. Reúne nove indicadores compactos da sessão e o histórico de capturas com filtros recolhidos por padrão. Pode ser reorganizada como qualquer outra aba.
+Aba opcional, desativada inicialmente e ativada em **Ajustes → Organizar abas**. Reúne seis indicadores legíveis da sessão e o histórico de capturas com filtros recolhidos por padrão. Pode ser reorganizada como qualquer outra aba.
 
 ### Shinies e personalização
 
@@ -89,6 +89,7 @@ Listas extensas de capturas, Shinies, atividades, fichas e loot têm área de ro
 | `core.js` | Leitura e normalização dos eventos do jogo |
 | `session.js` | Estatísticas acumuladas, bônus recentes, fechamento de 24 horas e LOGs |
 | `capture-log.js` | Leitura e associação de metadados do Log de Capturas |
+| `market.js` | Interpretação local dos detalhes do Pokémon selecionado no Mercado Global |
 | `log.html`, `log.css`, `log.js` | Visualizador Community LOG |
 | `main-bridge.js` | Leitura passiva de eventos recebidos na página |
 | `background.js` | Consultas externas, recursos e abertura de relatórios |
@@ -107,3 +108,7 @@ node --test tests/*.test.js
 - **Licença:** [MIT](LICENSE)
 
 Community Dex é uma ferramenta comunitária independente, sem afiliação oficial ao jogo ou à Pokémon Company. O uso deve respeitar as regras e permissões aplicáveis ao Poké Idle World.
+
+## Privacidade e compatibilidade
+
+A extensão interpreta informações que o próprio jogo apresenta no navegador. O leitor do Mercado Global apenas consulta a área de detalhes exibida ao selecionar um anúncio, sem realizar compras, alterações ou requisições adicionais. As análises manuais são calculadas localmente. O projeto é independente e não é afiliado oficialmente ao Poké Idle World.

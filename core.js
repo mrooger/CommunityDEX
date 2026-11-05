@@ -84,6 +84,20 @@
     const types=[...new Set(declaredTypes)];
     return {name,level,quality:quality??1,ivTotal:sumIVMatch?num(sumIVMatch[1]):null,ivMax:sumIVMatch?num(sumIVMatch[2]):null,stats:rawStat,types,power:labels(/(?:poder|power)\s*[:\-]?\s*([\d.,]+)/i,s),timestamp:Date.now()};
   }
+  const MANUAL_FIELDS=['name','level','quality','ivTotal','power','type1','type2','hp','atk','def','spa','spd','spe'];
+  function manualPokemon(fields){
+    if(!fields||typeof fields!=='object')return null;
+    const name=text(fields.name,70);
+    const level=positive(fields.level),quality=positive(fields.quality);
+    if(!name||!Number.isInteger(level)||level<1||level>10000||quality===null||quality<=0||quality>10)return null;
+    const stats=Object.fromEntries(['hp','atk','def','spa','spd','spe'].map(key=>[key,positive(fields[key])]));
+    if(Object.values(stats).filter(v=>v!==null).length<4)return null;
+    const ivTotal=fields.ivTotal===''||fields.ivTotal==null?null:positive(fields.ivTotal);
+    if(ivTotal!==null&&ivTotal>192)return null;
+    const power=fields.power===''||fields.power==null?null:positive(fields.power);
+    const types=[...new Set([fields.type1,fields.type2].map(typeCode).filter(Boolean))];
+    return {name,level,quality,stats,types,ivTotal,ivMax:ivTotal===null?null:192,power,timestamp:Date.now()};
+  }
   const MANUAL_TEMPLATE = [
     'Nome do Pokémon',
     'Lv: [nível] · Quality: ×[qualidade] · IV: [total]/192',
@@ -428,6 +442,6 @@
     arr.push({xp:positive(item.xpGained)??0,totalXp:positive(item.totalXp),level:positive(item.level),name:text(item.speciesName||item.pokemonName||'—',70),parts:typeof item.xpParts==='object'&&item.xpParts?Object.fromEntries(Object.entries(item.xpParts).slice(0,12).map(([k,v])=>[text(k,30),positive(v)||0])):{},loot:Array.isArray(item.loot)?item.loot.slice(0,30).map(i=>({name:text(i.name||i.itemName||i.itemId||'Item',50),qty:positive(i.qty??i.quantity)??1})):[],t:Date.now()});
   }return arr;}
   function qualityLabel(q){if(q===null||!Number.isFinite(Number(q)))return 'Indefinida';const v=Number(q);return v<1?'Fraca':v<1.1?'Comum':v<1.3?'Incomum':v<1.5?'Rara':v<1.7?'Épica':v<2?'Lendária':v<3?'Mítica':v<4?'Anciã':'Divina';}
-  scope.CommunityCore={STAT_NAMES,TYPE_PT,num,positive,text,escape,format,short,typeCode,typeMatrix,parseTooltip,formatPokemonSheet,estimateIV,normalizeName,speciesSprite,baseSprite,safeSprite,xpForLevel,huntRates,shinyFrom,normalizeShinyHistory,createShinyEncounterTracker,registerSpeciesCatalog,normalizedShinyName,captureFrom,captureDetail,killFrom,qualityLabel,speciesNameById:id=>speciesById.get(Number(id))||null};
+  scope.CommunityCore={STAT_NAMES,TYPE_PT,manualPokemon,num,positive,text,escape,format,short,typeCode,typeMatrix,parseTooltip,formatPokemonSheet,estimateIV,normalizeName,speciesSprite,baseSprite,safeSprite,xpForLevel,huntRates,shinyFrom,normalizeShinyHistory,createShinyEncounterTracker,registerSpeciesCatalog,normalizedShinyName,captureFrom,captureDetail,killFrom,qualityLabel,speciesNameById:id=>speciesById.get(Number(id))||null};
   if(typeof module!=='undefined'&&module.exports)module.exports=scope.CommunityCore;
 })(typeof globalThis!=='undefined'?globalThis:this);

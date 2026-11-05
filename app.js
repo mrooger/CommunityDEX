@@ -6,14 +6,15 @@
   const C=globalThis.CommunityCore;
   const M=globalThis.CommunitySession;
   const L=globalThis.CommunityCaptureLog;
+  const MK=globalThis.CommunityMarket;
   const CH='__COMMUNITY_DEX_EVENTS_V1__';
   const STORE='community-dex:v1';
   const LEGACY_STORE='stigal-dex:v1';
   const TAB_META=[['overview','Visão geral','◫'],['pokemon','Pokédex','◉'],['hunt','Hunt','⚡'],['captures','Capturas','◈'],['shiny','Shinies','✦'],['stream','Stream Geral','📹'],['settings','Ajustes','⚙']];
   const OPTIONAL_TABS=['overview','pokemon','hunt','captures','shiny','stream'];
-  const SECTIONS={overview:[['overviewMetrics','Indicadores'],['overviewLogs','Histórico & Logs'],['overviewActivity','Atividade recente']],pokemon:[['pokemonTypes','Efetividades'],['pokemonStats','Atributos'],['pokemonManual','Leitura manual'],['pokemonHistory','Histórico de fichas']],hunt:[['huntLoot','Loot'],['huntComposition','Composição de XP'],['huntCalculator','Calculadora de XP']],captures:[['capturesBalls','Resultados por bola'],['capturesRecent','Últimas capturas']],shiny:[['shinyDetector','Detector e áudio'],['shinyHistory','Histórico de Shinies']],stream:[['streamMetrics','Indicadores'],['streamRecent','Últimas capturas']]};
+  const SECTIONS={overview:[['overviewMetrics','Indicadores'],['overviewLogs','Histórico & Logs'],['overviewActivity','Atividade recente']],pokemon:[['pokemonTypes','Efetividades'],['pokemonStats','Atributos'],['pokemonManual','Leitura manual'],['pokemonSimple','Leitura simplificada'],['pokemonHistory','Histórico de fichas']],hunt:[['huntLoot','Loot'],['huntComposition','Composição de XP'],['huntCalculator','Calculadora de XP']],captures:[['capturesBalls','Resultados por bola'],['capturesRecent','Últimas capturas']],shiny:[['shinyDetector','Detector e áudio'],['shinyHistory','Histórico de Shinies']],stream:[['streamMetrics','Indicadores'],['streamRecent','Últimas capturas']]};
   const DEFAULT_SECTIONS=Object.fromEntries(Object.values(SECTIONS).flat().map(([key])=>[key,true]));
-  const DEFAULT_COLLAPSE={pokemonTypes:false,pokemonManual:false,huntComposition:false,huntCalculator:false,overviewLogs:false,overviewActivity:false,capturesBalls:false,shinyDetector:false};
+  const DEFAULT_COLLAPSE={pokemonTypes:false,pokemonManual:false,pokemonSimple:false,huntComposition:false,huntCalculator:false,overviewLogs:false,overviewActivity:false,capturesBalls:false,shinyDetector:false};
   const PREF={enabled:true,autoPokemon:true,shiny:true,sound:false,toasts:true,shinyBadge:true,floatingButton:true,autoUpdateCheck:true,dexMode:'smart',compact:false,ivMax:32,opacity:96,tabOrder:OPTIONAL_TABS,tabVisible:{...Object.fromEntries(OPTIONAL_TABS.map(id=>[id,true])),stream:false},sectionVisible:DEFAULT_SECTIONS,expanded:DEFAULT_COLLAPSE};
   const XP_LABELS={base:'XP base',vip:'Bônus VIP',boost:'Bônus de XP',streak:'Bônus de sequência',event:'Bônus de evento',typeDay:'Bônus do tipo do dia',typeday:'Bônus do tipo do dia',stream:'Bônus da stream',streamer:'Bônus da stream',twitch:'Bônus da Twitch',pokedex:'Bônus da Pokédex',other:'Outros bônus'};
   const sectionShown=key=>state.prefs.sectionVisible[key]!==false;
@@ -32,12 +33,15 @@
     const icon=sprite?`<img class="sd-capture-sprite" src="${E(sprite)}"${backup} alt="" loading="lazy" referrerpolicy="no-referrer">`:'◉';
     return `<div class="sd-event sd-capture-row"><span class="sd-event-icon sd-capture-icon ${c.shiny?'sd-shinycap':''}">${icon}</span><span><b>${E(c.name)}</b> ${c.shiny?'<span class="sd-capture-shiny">Shiny</span>':''}<small> · ${E(c.ball)}</small><span class="sd-capture-details"><i data-rarity="${E(tier)}">${E(rare)}${E(quality)}</i><small>IV ${E(iv)}</small></span></span><time>${formatTime(c.t)}</time></div>`;
   };
+  const SIMPLE_FIELDS=['name','level','quality','ivTotal','power','type1','type2','hp','atk','def','spa','spd','spe'];
+  const EMPTY_SIMPLE=Object.fromEntries(SIMPLE_FIELDS.map(key=>[key,'']));
+  const SIMPLE_STATS=[['hp','HP'],['atk','Ataque'],['def','Defesa'],['spa','Atq. especial'],['spd','Def. especial'],['spe','Velocidade']];
   const state={
     prefs:structuredClone(PREF),tab:'overview',open:false,min:false,pos:null,bridge:'Aguardando',socket:'aguardando',wsMessages:0,lastPacket:0,
     pokemon:null,pinned:null,history:[],base:{},basePending:new Set(),baseErrors:{},
     kills:[],totalXp:null,level:null,parts:{},loot:{},session:M.fresh(),dailyLogs:[],manualLogs:[],captureTab:'all',captureSort:'recent',captureRarities:[...M.RARITIES,'Não informada'],rarityDropdownOpen:false,capturesFiltersExpanded:false,streamFiltersExpanded:false,streamCatchesExpanded:false,
     catches:[],shinyLog:[],shinyTracker:C.createShinyEncounterTracker(),
-    feed:[],huntTarget:150,pokeTarget:100,activityExpanded:false,catchesExpanded:false,historyExpanded:false,lootExpanded:false,shinyExpanded:false,manualText:'',dockPos:null,completePos:null,completeSize:null,update:{status:'idle',version:'',url:'',downloadUrl:'',message:'',checkedAt:0}
+    feed:[],huntTarget:150,pokeTarget:100,activityExpanded:false,catchesExpanded:false,historyExpanded:false,lootExpanded:false,shinyExpanded:false,manualText:'',simpleForm:{...EMPTY_SIMPLE},dockPos:null,completePos:null,completeSize:null,update:{status:'idle',version:'',url:'',downloadUrl:'',message:'',checkedAt:0}
   };
   const now=()=>Date.now();
   const E=C.escape,F=C.format,S=C.short;
@@ -256,6 +260,27 @@
     else scheduleRender();
   });
   function scheduleRender(){if(renderTimer)return;renderTimer=setTimeout(()=>{renderTimer=null;if(now()-lastListScroll<850){scheduleRender();return;}render();},380);}
+  let marketScanTimer=null,marketFingerprint='';
+  function inspectMarket(){
+    marketScanTimer=null;
+    if(!state.prefs.enabled||!MK)return false;
+    const aside=document.querySelector('aside.mkt2-details,.mkt2-details');
+    if(!aside||aside.closest('#community-dex-root'))return false;
+    const style=getComputedStyle(aside);
+    if(style.display==='none'||style.visibility==='hidden'||aside.getBoundingClientRect().width===0)return false;
+    const selected=document.querySelector('.mkt2-card.clickable.active,.mkt2-trow.clickable.active');
+    const p=MK.parseDetails(aside,selected);
+    if(!p)return false;
+    const signature=[p.name,p.level,p.quality,p.ivTotal,...Object.values(p.stats)].join('|');
+    if(signature===marketFingerprint)return true;
+    marketFingerprint=signature;
+    storePokemon(p);
+    return true;
+  }
+  function scheduleMarketScan(delay=80){
+    if(marketScanTimer)clearTimeout(marketScanTimer);
+    marketScanTimer=setTimeout(inspectMarket,delay);
+  }
   function storePokemon(p){
     const sig=[p.name,p.level,p.quality,...Object.values(p.stats)].join(':');
     if(sig===lastTooltipKey&&state.pokemon&&[state.pokemon.name,state.pokemon.level,state.pokemon.quality,...Object.values(state.pokemon.stats)].join(':')===sig)return;
@@ -331,6 +356,17 @@
         }
         scheduleTooltip(45);
       };
+      const marketTarget=ev=>{
+        if(ev.target?.closest?.('.mkt2-trow.clickable,.mkt2-card.clickable'))scheduleMarketScan(75);
+      };
+      document.addEventListener('click',ev=>{
+        if(ev.target?.closest?.('.mkt2-trow.clickable,.mkt2-card.clickable')){
+          scheduleMarketScan(95);
+          setTimeout(inspectMarket,260);
+        }
+      },true);
+      document.addEventListener('focusin',marketTarget,true);
+      document.addEventListener('pointerover',marketTarget,true);
       document.addEventListener('pointerover',hovered,true);
       scheduleCaptureLog();
       captureLogPoller=setInterval(()=>{
@@ -342,6 +378,7 @@
         for(const m of muts){
           const parent=m.target?.nodeType===1?m.target:m.target?.parentElement;
           if(parent?.closest?.('#community-dex-root'))continue;
+          if(parent?.closest?.('.mkt2-details')||Array.from(m.addedNodes||[]).some(node=>node.nodeType===1&&(node.matches?.('.mkt2-details')||node.querySelector?.('.mkt2-details'))))scheduleMarketScan(100);
           if(parent?.closest?.('.clog-window')||Array.from(m.addedNodes||[]).some(node=>node.nodeType===1&&(node.matches?.('.clog-window,.clog-list,.clog-row')||node.querySelector?.('.clog-window,.clog-row'))))scheduleCaptureLog();
           if(m.type==='childList'){
             for(const node of m.addedNodes){
@@ -359,6 +396,7 @@
       });
       ob.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['style','class']});
       inspectTooltips();
+      scheduleMarketScan(250);
     };setup();
   }
   function loadBase(name){
@@ -404,6 +442,24 @@
     ${sectionShown('pokemonStats')?`<div class="sd-miniheading">✧ Atributos atuais</div><div class="sd-valuegrid">${Object.entries(C.STAT_NAMES).map(([key,label])=>`<div><small>${E(label)}</small><b>${F(p.stats?.[key])}</b></div>`).join('')}</div>`:''}
     ${sectionShown('pokemonTypes')?expandable('pokemonTypes','Fraquezas, resistências e imunidades','🛡',`<div class="sd-miniheading">⚔ Fraquezas ${matrix.weak.length?'':'· sem dados'}</div><div class="sd-tagrow">${chips(matrix.weak,'sd-weak')}</div><div class="sd-miniheading">🛡 Resistências</div><div class="sd-tagrow">${chips(matrix.resist,'sd-resist')}</div><div class="sd-miniheading">✧ Imunidades</div><div class="sd-tagrow">${chips(matrix.immune,'sd-immune')}</div>`,{count:'Análise de efetividade dos tipos'}):''}</article>`;
   }
+  function simplifiedForm(){
+    const data=state.simpleForm;
+    const field=(key,label,{type='number',placeholder='',step='1',min='0',max='',wide=false,required=false}={})=>
+      `<label class="sd-simple-field ${wide?'sd-simple-wide':''}"><span>${E(label)}${required?'<b> *</b>':''}</span><input data-simple-field="${key}" type="${type}" ${type==='number'?`inputmode="decimal" min="${min}" step="${step}" ${max?`max="${max}"`:''}`:''} value="${E(data[key]||'')}" placeholder="${E(placeholder)}" autocomplete="off"></label>`;
+    const typeSelect=(key,title)=>`<label class="sd-simple-field"><span>${E(title)}</span><select data-simple-field="${key}"><option value="">Não informado</option>${Object.entries(C.TYPE_PT).map(([type,name])=>`<option value="${E(type)}" ${data[key]===type?'selected':''}>${E(name)}</option>`).join('')}</select></label>`;
+    return `<p class="sd-simple-intro">Preencha os valores da ficha para analisar seus Pokémon sem precisar copiar textos.</p>
+      <div class="sd-simple-form">
+        ${field('name','Nome do Pokémon',{type:'text',placeholder:'Ex.: Arcanine',wide:true,required:true})}
+        ${field('level','Nível',{min:'1',max:'10000',placeholder:'100',required:true})}
+        ${field('quality','Qualidade ×',{step:'0.01',min:'0.01',max:'10',placeholder:'1.80',required:true})}
+        ${typeSelect('type1','Tipo principal')}${typeSelect('type2','Tipo secundário')}
+        <div class="sd-simple-label">Atributos atuais <small>preencha pelo menos quatro</small></div>
+        <div class="sd-simple-stats">${SIMPLE_STATS.map(([key,label])=>field(key,label,{placeholder:'0'})).join('')}</div>
+        ${field('ivTotal','IV total (opcional)',{max:'192',placeholder:'140'})}
+        ${field('power','Poder (opcional)',{placeholder:'12500'})}
+      </div>
+      <div class="sd-manual-actions"><button type="button" class="sd-btn" data-action="parse-simple">◉ Analisar Pokémon</button><button type="button" class="sd-ghost sd-copy-btn" data-action="simple-from-current" title="Usar os dados da ficha atual como exemplo">↧ Usar ficha atual</button><button type="button" class="sd-ghost sd-copy-btn" data-action="simple-clear">Limpar</button></div>`;
+  }
   function pokemon(){
     const p=state.pokemon;
     let compare='';
@@ -411,6 +467,7 @@
     return `<section class="sd-stack"><div class="sd-section-head"><h3>Pokédex inteligente</h3><span class="sd-pill">Ao passar o mouse</span></div>
       ${p?pokemonCard(p):empty('Passe o mouse sobre um Pokémon no inventário para ler a ficha.','◉')}
       ${compare}${sectionShown('pokemonManual')?expandable('pokemonManual','Leitura manual','✎',`<p>Edite uma ficha abaixo ou cole os dados de um Pokémon.</p><textarea id="sd-tooltip-input" rows="6" spellcheck="false" placeholder="Nome do Pokémon&#10;Lv 100 · Quality ×1.80&#10;HP 350 · Atk 240 · Def 210">${E(state.manualText)}</textarea><div class="sd-manual-actions"><button type="button" class="sd-btn" data-action="parse-manual">◉ Analisar ficha</button><button type="button" class="sd-ghost sd-copy-btn" data-action="copy-template" title="Copiar modelo de ficha e preencher o campo quando vazio">▣ Copiar modelo</button></div>`,{count:'Toque para inserir ou analisar uma ficha'}):''}
+      ${sectionShown('pokemonSimple')?expandable('pokemonSimple','Leitura simplificada','▦',simplifiedForm(),{count:'Preencha os campos de nome, nível, qualidade e atributos'}):''}
       ${sectionShown('pokemonHistory')?`<div class="sd-panelcard"><div class="sd-section-head"><h4>◷ Histórico recente</h4><small>${state.history.length} fichas</small></div>
       <div data-scroll-id="pokemon-history" class="sd-list-area ${state.historyExpanded?'sd-list-scroll':''}">${state.history.length?state.history.slice(0,state.historyExpanded?50:5).map((h,i)=>`<button class="sd-history" data-action="load-history" data-index="${i}"><span>◉</span><b>${E(h.name)}</b><small>Lv ${F(h.level)} · ×${F(h.quality,2)}</small></button>`).join(''):empty('Ainda não existem análises salvas.')}</div>${buttonMore('show-more-history',state.historyExpanded,state.history.length,5)}</div>`:''}</section>`;
   }
@@ -549,7 +606,7 @@
     <div class="sd-miniheading">Opacidade do painel · <output id="sd-opacity-label">${state.prefs.opacity}%</output></div><input type="range" min="75" max="100" step="1" value="${state.prefs.opacity}" id="sd-opacity-slider"></div>
     <div class="sd-panelcard"><h4>✦ Precisão do cálculo de IV</h4><p>Selecione o limite individual usado nas estimativas.</p><div class="sd-segments"><button class="sd-segment ${state.prefs.ivMax===31?'active':''}" data-action="max-iv" data-value="31">31 IV</button><button class="sd-segment ${state.prefs.ivMax===32?'active':''}" data-action="max-iv" data-value="32">32 IV</button></div></div>
     <div class="sd-panelcard"><div class="sd-flex"><div><h4>↻ Restaurar preferências</h4><p>Reorganiza a interface sem apagar as estatísticas.</p></div><button class="sd-ghost sd-xs" data-action="reset-preferences">Restaurar</button></div></div>
-    <div class="sd-credit">COMMUNITY DEX · v1.4.0</div></section>`;
+    <div class="sd-credit">COMMUNITY DEX · v1.5.0</div></section>`;
   }
   const toggle=(key,label,sub)=>`<div class="sd-flex sd-pref"><div><h4>${E(label)}</h4><p>${E(sub)}</p></div><label class="sd-toggle"><input type="checkbox" data-pref="${E(key)}" ${state.prefs[key]?'checked':''}><span></span></label></div>`;
   const TABS=TAB_META;
@@ -566,7 +623,7 @@
     dock.innerHTML=`<img class="sd-dock-logo" src="${E(logo)}" alt="" draggable="false"><i id="sd-dock-count"></i>`;
     dock.addEventListener('pointerdown',startDockDrag);
     dock.addEventListener('click',()=>{if(suppressDockClick){suppressDockClick=false;return;}state.open=!state.open;render();});
-    panel=document.createElement('div');panel.id='sd-panel';panel.innerHTML=`<header id="sd-titlebar"><div class="sd-brand"><div class="sd-brand-mark"><img class="sd-brand-logo" src="${E(logo)}" alt="" draggable="false"></div><div><strong>COMMUNITY <em>DEX</em></strong><span>SUA FERRAMENTA POKÉMON</span></div></div><div class="sd-header-actions"><button id="sd-min" title="Minimizar ou expandir">−</button><button id="sd-close" title="Fechar">×</button></div></header><div id="sd-statusbar"></div><nav id="sd-nav"></nav><main id="sd-body"></main><footer id="sd-footer"><span>ALT + P · Painel</span><span>Versão v1.4.0</span></footer><span id="sd-resize-grip" role="button" aria-label="Arraste para ajustar largura e altura" title="Arraste para ajustar largura e altura">◢</span>`;
+    panel=document.createElement('div');panel.id='sd-panel';panel.innerHTML=`<header id="sd-titlebar"><div class="sd-brand"><div class="sd-brand-mark"><img class="sd-brand-logo" src="${E(logo)}" alt="" draggable="false"></div><div><strong>COMMUNITY <em>DEX</em></strong><span>SUA FERRAMENTA POKÉMON</span></div></div><div class="sd-header-actions"><button id="sd-min" title="Minimizar ou expandir">−</button><button id="sd-close" title="Fechar">×</button></div></header><div id="sd-statusbar"></div><nav id="sd-nav"></nav><main id="sd-body"></main><footer id="sd-footer"><span>ALT + P · Painel</span><span>Versão v1.5.0</span></footer><span id="sd-resize-grip" role="button" aria-label="Arraste para ajustar largura e altura" title="Arraste para ajustar largura e altura">◢</span>`;
     alertBox=document.createElement('div');alertBox.id='sd-alerts';
     host.append(dock,panel,alertBox);
     body=panel.querySelector('#sd-body');
@@ -713,11 +770,13 @@
   function onInput(ev){
     const target=ev.target;
     if(target?.id==='sd-tooltip-input')state.manualText=target.value;
+    if(target?.dataset?.simpleField&&SIMPLE_FIELDS.includes(target.dataset.simpleField))state.simpleForm[target.dataset.simpleField]=target.value;
     if(target?.dataset.filterInput){const term=C.text(target.value,80).toLowerCase();for(const row of body.querySelectorAll('[data-filter]'))row.hidden=term&&!row.dataset.filter.includes(term);}
     if(target?.id==='sd-opacity-slider'){state.prefs.opacity=Number(target.value);panel.style.setProperty('--sd-alpha',String(state.prefs.opacity/100));const out=body.querySelector('#sd-opacity-label');if(out)out.textContent=state.prefs.opacity+'%';persist();}
   }
   function onChange(ev){
     const target=ev.target;
+    if(target?.dataset?.simpleField&&SIMPLE_FIELDS.includes(target.dataset.simpleField)){state.simpleForm[target.dataset.simpleField]=target.value;return;}
     if(target?.dataset?.captureKind!==undefined){if(['all','normal','shiny'].includes(target.value)){state.captureTab=target.value;state.catchesExpanded=false;state.streamCatchesExpanded=false;target.blur();render();}return;}
     if(target?.dataset?.captureSort!==undefined){if(['recent','iv','rarity'].includes(target.value)){state.captureSort=target.value;target.blur();render();}return;}
     const pref=target?.dataset?.pref;
@@ -729,7 +788,7 @@
   function onAction(event){
     const btn=event.target.closest('button[data-action]');if(!btn)return;
     const action=btn.dataset.action;
-    if(action==='toggle-section'){const key=btn.dataset.section;if(!['pokemonTypes','pokemonManual','huntComposition','huntCalculator','overviewLogs','overviewActivity','capturesBalls','shinyDetector'].includes(key))return;state.prefs.expanded[key]=!state.prefs.expanded[key];persist();render();}
+    if(action==='toggle-section'){const key=btn.dataset.section;if(!['pokemonTypes','pokemonManual','pokemonSimple','huntComposition','huntCalculator','overviewLogs','overviewActivity','capturesBalls','shinyDetector'].includes(key))return;state.prefs.expanded[key]=!state.prefs.expanded[key];persist();render();}
     else if(action==='save-manual'){saveManual();toast('LOG salvo','Resumo manual disponível no Histórico & Logs.');}
     else if(action==='view-log'){logViewer(btn.dataset.kind,btn.dataset.id);}
     else if(action==='delete-log'){const kind=btn.dataset.kind,id=btn.dataset.id;if(!['daily','manual'].includes(kind))return;if(!confirm('Excluir este LOG?'))return;if(kind==='daily')state.dailyLogs=state.dailyLogs.filter(v=>v.id!==id);else state.manualLogs=state.manualLogs.filter(v=>v.id!==id);persist();render();}
@@ -775,6 +834,23 @@
       const input=body.querySelector('#sd-tooltip-input');
       if(input&&!input.value.trim()){input.value=template;state.manualText=template;}
       copyText(template,'Modelo copiado','Cole ou edite os campos para analisar.');
+    }
+    else if(action==='parse-simple'){
+      const data={...state.simpleForm};
+      for(const input of body.querySelectorAll('[data-simple-field]'))if(SIMPLE_FIELDS.includes(input.dataset.simpleField))data[input.dataset.simpleField]=input.value;
+      state.simpleForm=data;
+      const pokemon=C.manualPokemon(data);
+      if(pokemon){storePokemon(pokemon);toast('Ficha reconhecida',pokemon.name+' • Nível '+pokemon.level);}
+      else toast('Confira os campos','Informe nome, nível, qualidade e pelo menos 4 atributos válidos.');
+    }
+    else if(action==='simple-clear'){state.simpleForm={...EMPTY_SIMPLE};render();}
+    else if(action==='simple-from-current'){
+      const p=state.pokemon;
+      if(!p){toast('Nenhuma ficha ativa','Analise um Pokémon primeiro ou preencha os dados manualmente.');return;}
+      state.simpleForm={...EMPTY_SIMPLE,name:p.name,level:String(p.level??''),quality:String(p.quality??''),
+        ivTotal:p.ivTotal===null||p.ivTotal===undefined?'':String(p.ivTotal),power:p.power===null||p.power===undefined?'':String(p.power),
+        type1:p.types?.[0]||'',type2:p.types?.[1]||'',...Object.fromEntries(SIMPLE_STATS.map(([key])=>[key,p.stats?.[key]===null||p.stats?.[key]===undefined?'':String(p.stats[key])]))};
+      render();
     }
     else if(action==='parse-manual'){
       const raw=body.querySelector('#sd-tooltip-input')?.value||state.manualText;const p=C.parseTooltip(raw);

@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## v1.5.0 — Mercado Global e Leitura Simplificada
+
+- Reconhecimento dos Pokémon selecionados no Mercado Global, incluindo nível, qualidade, atributos, tipos, IV total e poder quando fornecidos pelo jogo.
+- Leitura específica do painel de detalhes do mercado, sem alterar os anúncios ou realizar ações no jogo.
+- Nova **Leitura Simplificada** recolhível na Pokédex: campos individuais para nome, nível, qualidade, tipos e os seis atributos, com IV e poder opcionais.
+- Preenchimento rápido a partir de uma ficha já reconhecida, limpeza dos campos e validação antes da análise.
+- Mantidas as ferramentas de sessões, Community LOG, Capturas, Stream Geral e Radar Shiny da v1.4.0.
+
 ## v1.4.0 — Sessões, Community LOG e capturas
 
 ### Novo
